@@ -2,25 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Annotated, Any
 
 import typer
 
 from llmcalc import __version__
-from llmcalc.api import (
-    calculate_token_cost,
-    clear_cache,
-    get_model_costs,
-)
+from llmcalc.api import clear_cache, cost
+from llmcalc.api import model as model_costs
 from llmcalc.config import DEFAULT_CACHE_TIMEOUT_SECONDS
 
 DEFAULT_CACHE_TIMEOUT_HELP = (
     f"Cache TTL in seconds (default: {DEFAULT_CACHE_TIMEOUT_SECONDS} or LLMCALC_CACHE_TIMEOUT)"
 )
 
-app = typer.Typer(help="Calculate LLM token pricing from llmlite data.", no_args_is_help=True)
+app = typer.Typer(help="Calculate LLM token pricing.", no_args_is_help=True)
 cache_app = typer.Typer(help="Cache commands.")
 app.add_typer(cache_app, name="cache")
 
@@ -77,13 +73,11 @@ def quote(
     as_json: bool = _json_option(),
 ) -> None:
     """Quote input/output/total cost for a model."""
-    result = asyncio.run(
-        calculate_token_cost(
-            model=model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cache_timeout=cache_timeout,
-        )
+    result = cost(
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_timeout=cache_timeout,
     )
 
     if result is None:
@@ -107,7 +101,7 @@ def model_cmd(
     as_json: bool = _json_option(),
 ) -> None:
     """Show per-token pricing for a model."""
-    result = asyncio.run(get_model_costs(model=model, cache_timeout=cache_timeout))
+    result = model_costs(model=model, cache_timeout=cache_timeout)
 
     if result is None:
         typer.echo(f"Model not found: {model}", err=True)

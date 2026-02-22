@@ -1,6 +1,14 @@
 """llmcalc public package exports."""
 
-from llmcalc.api import calculate_token_cost, calculate_usage_cost, clear_cache, get_model_costs
+from llmcalc.api import (
+    clear_cache,
+    cost,
+    cost_async,
+    model,
+    model_async,
+    usage,
+    usage_async,
+)
 from llmcalc.config import get_package_version
 from llmcalc.models import CostBreakdown, ModelPricing
 
@@ -10,8 +18,11 @@ __all__ = [
     "__version__",
     "CostBreakdown",
     "ModelPricing",
-    "calculate_token_cost",
-    "calculate_usage_cost",
+    "cost",
+    "cost_async",
     "clear_cache",
-    "get_model_costs",
+    "model",
+    "model_async",
+    "usage",
+    "usage_async",
 ]

@@ -10,7 +10,7 @@ def test_raw_model_pricing_from_alias_fields() -> None:
         provider="openai",
     )
 
-    model = raw.to_model_pricing("gpt-4o-mini")
+    model = raw.to_model_pricing("gpt-5.1")
     assert model.input_cost_per_token == Decimal("0.000001")
     assert model.output_cost_per_token == Decimal("0.000002")
     assert model.provider == "openai"
@@ -22,6 +22,6 @@ def test_raw_model_pricing_from_per_million_fields() -> None:
         output_cost_per_million_tokens="4",
     )
 
-    model = raw.to_model_pricing("gpt-4o-mini")
+    model = raw.to_model_pricing("gpt-5.1")
     assert model.input_cost_per_token == Decimal("0.000002")
     assert model.output_cost_per_token == Decimal("0.000004")

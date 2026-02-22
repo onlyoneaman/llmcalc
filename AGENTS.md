@@ -12,6 +12,9 @@
 - Keep public API typed and stable.
 
 ## Local Commands
+- Dev env:
+  - Create: `python -m venv .venv`
+  - Activate (macOS/Linux): `source .venv/bin/activate`
 - Install: `pip install -e '.[dev]'`
 - Lint: `python -m ruff check .`
 - Type check: `python -m mypy llmcalc`

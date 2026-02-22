@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Coroutine
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 from llmcalc.cache import clear_cache as clear_cache_file
 from llmcalc.config import DEFAULT_CACHE_TIMEOUT_SECONDS, resolve_cache_timeout
@@ -12,11 +14,12 @@ from llmcalc.normalize import resolve_model_key
 from llmcalc.pricing_client import get_pricing_table
 
 DEFAULT_ROUNDING_PLACES = 6
+T = TypeVar("T")
 
 
 @runtime_checkable
 class UsageLike(Protocol):
-    """Protocol for usage objects accepted by `calculate_usage_cost`."""
+    """Protocol for usage objects accepted by `usage`."""
 
     prompt_tokens: int
     completion_tokens: int
@@ -32,7 +35,20 @@ def _validate_non_negative(value: int, field_name: str) -> None:
         raise ValueError(f"{field_name} must be non-negative")
 
 
-async def get_model_costs(
+def _run_sync(awaitable: Coroutine[Any, Any, T]) -> T:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(awaitable)
+
+    awaitable.close()
+    raise RuntimeError(
+        "Cannot use synchronous API while an event loop is running; "
+        "use *_async API functions instead."
+    )
+
+
+async def model_async(
     model: str,
     cache_timeout: int | None = None,
 ) -> ModelPricing | None:
@@ -44,7 +60,15 @@ async def get_model_costs(
     return table[resolved]
 
 
-async def calculate_token_cost(
+def model(
+    model: str,
+    cache_timeout: int | None = None,
+) -> ModelPricing | None:
+    """Return per-token pricing for a model, or `None` if not found."""
+    return _run_sync(model_async(model=model, cache_timeout=cache_timeout))
+
+
+async def cost_async(
     model: str,
     input_tokens: int,
     output_tokens: int,
@@ -54,7 +78,7 @@ async def calculate_token_cost(
     _validate_non_negative(input_tokens, "input_tokens")
     _validate_non_negative(output_tokens, "output_tokens")
 
-    model_costs = await get_model_costs(model, cache_timeout=cache_timeout)
+    model_costs = await model_async(model, cache_timeout=cache_timeout)
     if model_costs is None:
         return None
 
@@ -67,6 +91,23 @@ async def calculate_token_cost(
         output_cost=output_cost,
         total_cost=total_cost,
         currency=model_costs.currency,
+    )
+
+
+def cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_timeout: int | None = None,
+) -> CostBreakdown | None:
+    """Calculate model usage cost from token counts, or return `None` if model is unavailable."""
+    return _run_sync(
+        cost_async(
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_timeout=cache_timeout,
+        )
     )
 
 
@@ -97,18 +138,33 @@ def _get_usage_tokens(usage: Any) -> tuple[int, int]:
     return input_tokens, output_tokens
 
 
-async def calculate_usage_cost(
+async def usage_async(
     model: str,
     usage: UsageLike | dict[str, Any],
     cache_timeout: int | None = None,
 ) -> CostBreakdown | None:
     """Calculate cost from an object that includes usage token fields."""
     input_tokens, output_tokens = _get_usage_tokens(usage)
-    return await calculate_token_cost(
+    return await cost_async(
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cache_timeout=cache_timeout,
+    )
+
+
+def usage(
+    model: str,
+    usage: UsageLike | dict[str, Any],
+    cache_timeout: int | None = None,
+) -> CostBreakdown | None:
+    """Calculate cost from an object that includes usage token fields."""
+    return _run_sync(
+        usage_async(
+            model=model,
+            usage=usage,
+            cache_timeout=cache_timeout,
+        )
     )
 
 

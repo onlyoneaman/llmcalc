@@ -6,8 +6,7 @@ from collections.abc import Iterable
 
 # Keep aliases small and explicit; extend as model IDs evolve.
 ALIASES: dict[str, str] = {
-    "gpt-4o-mini-latest": "gpt-4o-mini",
-    "gpt-4.1-mini-latest": "gpt-4.1-mini",
+    "gpt-5.1-latest": "gpt-5.1",
 }
 
 PROVIDER_PREFIXES: set[str] = {

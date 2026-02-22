@@ -8,20 +8,20 @@ from llmcalc.pricing_client import get_pricing_table, parse_pricing_payload
 
 def test_parse_pricing_payload_direct_table() -> None:
     payload = {
-        "gpt-4o-mini": {
+        "gpt-5.1": {
             "input_cost_per_token": "0.000001",
             "output_cost_per_token": "0.000002",
         }
     }
 
     table = parse_pricing_payload(payload)
-    assert table["gpt-4o-mini"].input_cost_per_token == Decimal("0.000001")
+    assert table["gpt-5.1"].input_cost_per_token == Decimal("0.000001")
 
 
 def test_parse_pricing_payload_wrapped_table() -> None:
     payload = {
         "data": {
-            "gpt-4o-mini": {
+            "gpt-5.1": {
                 "input_cost_per_million_tokens": "2",
                 "output_cost_per_million_tokens": "4",
             }
@@ -29,7 +29,7 @@ def test_parse_pricing_payload_wrapped_table() -> None:
     }
 
     table = parse_pricing_payload(payload)
-    assert table["gpt-4o-mini"].output_cost_per_token == Decimal("0.000004")
+    assert table["gpt-5.1"].output_cost_per_token == Decimal("0.000004")
 
 
 def test_parse_pricing_payload_raises_for_invalid() -> None:
@@ -40,20 +40,20 @@ def test_parse_pricing_payload_raises_for_invalid() -> None:
 def test_parse_pricing_payload_uses_env_currency_fallback(monkeypatch) -> None:
     monkeypatch.setenv("LLMCALC_CURRENCY", "inr")
     payload = {
-        "gpt-4o-mini": {
+        "gpt-5.1": {
             "input_cost_per_token": "0.000001",
             "output_cost_per_token": "0.000002",
         }
     }
 
     table = parse_pricing_payload(payload)
-    assert table["gpt-4o-mini"].currency == "INR"
+    assert table["gpt-5.1"].currency == "INR"
 
 
 def test_parse_pricing_payload_prefers_payload_currency_over_env(monkeypatch) -> None:
     monkeypatch.setenv("LLMCALC_CURRENCY", "inr")
     payload = {
-        "gpt-4o-mini": {
+        "gpt-5.1": {
             "input_cost_per_token": "0.000001",
             "output_cost_per_token": "0.000002",
             "currency": "USD",
@@ -61,13 +61,13 @@ def test_parse_pricing_payload_prefers_payload_currency_over_env(monkeypatch) ->
     }
 
     table = parse_pricing_payload(payload)
-    assert table["gpt-4o-mini"].currency == "USD"
+    assert table["gpt-5.1"].currency == "USD"
 
 
 @pytest.mark.asyncio
 async def test_get_pricing_table_uses_cache(monkeypatch) -> None:
     cached = {
-        "gpt-4o-mini": {
+        "gpt-5.1": {
             "input_cost_per_token": "0.000001",
             "output_cost_per_token": "0.000002",
         }
@@ -82,7 +82,7 @@ async def test_get_pricing_table_uses_cache(monkeypatch) -> None:
     monkeypatch.setattr("llmcalc.pricing_client.fetch_pricing_payload", _never_fetch)
 
     table = await get_pricing_table(cache_timeout=3600)
-    assert "gpt-4o-mini" in table
+    assert "gpt-5.1" in table
 
 
 @pytest.mark.asyncio
@@ -94,7 +94,7 @@ async def test_get_pricing_table_fetches_and_saves(monkeypatch) -> None:
     async def _fetch(pricing_url=None):
         _ = pricing_url
         return {
-            "gpt-4o-mini": {
+            "gpt-5.1": {
                 "input_cost_per_token": "0.000001",
                 "output_cost_per_token": "0.000002",
             }
@@ -107,7 +107,7 @@ async def test_get_pricing_table_fetches_and_saves(monkeypatch) -> None:
     )
 
     table = await get_pricing_table(cache_timeout=3600)
-    assert "gpt-4o-mini" in table
+    assert "gpt-5.1" in table
     assert saved["payload"] is not None
 
 
