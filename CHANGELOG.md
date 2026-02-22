@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+- Added a separate JavaScript/TypeScript implementation under `js/` for npm publishing.
+- Added a native Node CLI (`llmcalc`) with `quote`, `model`, `cache clear`, and version flags.
+- Added JS module parity for config, normalization, pricing parsing/fetching, cache, and API helpers.
+- Added JavaScript tests for API, pricing client, normalization, cache, models, and CLI behavior.
+- Extended CI with a dedicated JavaScript job (`build`, `typecheck`, `test`, `npm pack --dry-run`).
+
 ## 0.1.1
 - Simplified public API naming to short helpers:
   - Sync: `cost`, `usage`, `model`

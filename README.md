@@ -5,19 +5,25 @@
 [![CI](https://github.com/onlyoneaman/llmcalc/actions/workflows/ci.yml/badge.svg)](https://github.com/onlyoneaman/llmcalc/actions/workflows/ci.yml)
 [![License](https://img.shields.io/pypi/l/llmcalc.svg)](LICENSE)
 
-`llmcalc` is a typed Python library and CLI for estimating LLM token costs.
+`llmcalc` provides Python and JavaScript implementations for estimating LLM token costs.
 
-## Install
+## Install (Python)
 
 ```bash
 pip install llmcalc
+```
+
+## Install (JavaScript)
+
+```bash
+npm install llmcalc
 ```
 
 ## What It Does
 
 - Resolves model pricing from an upstream pricing source.
 - Calculates input, output, and total costs with deterministic decimal rounding.
-- Provides a small Python API and a CLI.
+- Provides small Python and JavaScript APIs plus CLIs.
 - Caches pricing data locally (default TTL: `43200` seconds).
 
 ## Cost Formula
@@ -43,6 +49,17 @@ if result is not None:
 You can also calculate from usage-style objects via `usage(...)`.
 Async variants are available as `cost_async(...)` and `usage_async(...)`.
 
+## JavaScript Quickstart
+
+```ts
+import { cost } from "llmcalc";
+
+const result = await cost("gpt-5.1", 1200, 800);
+if (result !== null) {
+  console.log(result.totalCost.toString(), result.currency);
+}
+```
+
 ## CLI Quickstart
 
 ```bash
@@ -58,6 +75,13 @@ llmcalc cache clear
 # show version
 llmcalc --version
 llmcalc -v
+
+# JavaScript CLI
+llmcalc quote --model gpt-5.1 --input 1200 --output 800
+llmcalc model --model gpt-5.1 --json
+llmcalc cache clear
+llmcalc --version
+llmcalc -v
 ```
 
 ## Configuration
@@ -65,6 +89,7 @@ llmcalc -v
 - `LLMCALC_CACHE_TIMEOUT`: cache TTL in seconds (default `43200`)
 - `LLMCALC_PRICING_URL`: override pricing source URL
 - `LLMCALC_CURRENCY`: fallback currency label if upstream omits currency
+- `LLMCALC_CACHE_PATH`: optional cache file path override (JavaScript package)
 
 ## Maintainers
 
