@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
 - Simplified public API naming to short helpers:
   - Sync: `cost`, `usage`, `model`
   - Async: `cost_async`, `usage_async`, `model_async`

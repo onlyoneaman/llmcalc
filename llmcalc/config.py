@@ -6,7 +6,7 @@ import os
 from importlib import metadata
 
 APP_NAME = "llmcalc"
-FALLBACK_VERSION = "0.1.0"
+FALLBACK_VERSION = "0.1.1"
 DEFAULT_CACHE_TIMEOUT_SECONDS = 43200
 DEFAULT_CURRENCY = "USD"
 DEFAULT_PRICING_URL = (
