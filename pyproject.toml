@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "llmprice"
+name = "llmcalc"
 version = "0.1.0"
 description = "Calculate LLM token costs from llmlite pricing data"
 readme = "README.md"
@@ -28,13 +28,13 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/onlyoneaman/llmprice"
-Repository = "https://github.com/onlyoneaman/llmprice"
-Issues = "https://github.com/onlyoneaman/llmprice/issues"
-Changelog = "https://github.com/onlyoneaman/llmprice/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/onlyoneaman/llmcalc"
+Repository = "https://github.com/onlyoneaman/llmcalc"
+Issues = "https://github.com/onlyoneaman/llmcalc/issues"
+Changelog = "https://github.com/onlyoneaman/llmcalc/blob/main/CHANGELOG.md"
 
 [project.scripts]
-llmprice = "llmprice.cli:app"
+llmcalc = "llmcalc.cli:app"
 
 [project.optional-dependencies]
 dev = [

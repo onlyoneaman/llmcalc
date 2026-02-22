@@ -1,4 +1,4 @@
-"""CLI for llmprice."""
+"""CLI for llmcalc."""
 
 from __future__ import annotations
 
@@ -8,16 +8,16 @@ from typing import Annotated, Any
 
 import typer
 
-from llmprice import __version__
-from llmprice.api import (
+from llmcalc import __version__
+from llmcalc.api import (
     calculate_token_cost,
     clear_cache,
     get_model_costs,
 )
-from llmprice.config import DEFAULT_CACHE_TIMEOUT_SECONDS
+from llmcalc.config import DEFAULT_CACHE_TIMEOUT_SECONDS
 
 DEFAULT_CACHE_TIMEOUT_HELP = (
-    f"Cache TTL in seconds (default: {DEFAULT_CACHE_TIMEOUT_SECONDS} or LLMPRICE_CACHE_TIMEOUT)"
+    f"Cache TTL in seconds (default: {DEFAULT_CACHE_TIMEOUT_SECONDS} or LLMCALC_CACHE_TIMEOUT)"
 )
 
 app = typer.Typer(help="Calculate LLM token pricing from llmlite data.", no_args_is_help=True)
@@ -48,7 +48,7 @@ def _emit(data: dict[str, object], as_json: bool) -> None:
 
 def _version_callback(value: bool) -> None:
     if value:
-        typer.echo(f"llmprice {__version__}")
+        typer.echo(f"llmcalc {__version__}")
         raise typer.Exit()
 
 

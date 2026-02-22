@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from llmprice.models import RawModelPricing
+from llmcalc.models import RawModelPricing
 
 
 def test_raw_model_pricing_from_alias_fields() -> None:

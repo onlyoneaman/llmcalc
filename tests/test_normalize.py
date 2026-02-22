@@ -1,4 +1,4 @@
-from llmprice.normalize import normalize_model_name, resolve_model_key
+from llmcalc.normalize import normalize_model_name, resolve_model_key
 
 
 def test_normalize_model_name_prefixes() -> None:

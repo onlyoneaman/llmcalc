@@ -2,7 +2,7 @@ import json
 import time
 from pathlib import Path
 
-from llmprice import cache
+from llmcalc import cache
 
 
 def _set_cache_path(monkeypatch, path: Path) -> None:

@@ -1,18 +1,18 @@
-# llmprice
+# llmcalc
 
-`llmprice` is a Python package to calculate LLM token costs from `llmlite` pricing data.
+`llmcalc` is a Python package to calculate LLM token costs from `llmlite` pricing data.
 
 ## Install
 
 ```bash
-pip install llmprice
+pip install llmcalc
 ```
 
 ## Python usage
 
 ```python
 import asyncio
-from llmprice import calculate_token_cost
+from llmcalc import calculate_token_cost
 
 result = asyncio.run(calculate_token_cost("gpt-4o-mini", 1200, 800))
 if result:
@@ -22,18 +22,18 @@ if result:
 ## CLI usage
 
 ```bash
-llmprice quote --model gpt-4o-mini --input 1200 --output 800
-llmprice model --model gpt-4o-mini --json
-llmprice cache clear
-llmprice --version
+llmcalc quote --model gpt-4o-mini --input 1200 --output 800
+llmcalc model --model gpt-4o-mini --json
+llmcalc cache clear
+llmcalc --version
 ```
 
 ## Defaults
 
 - Default cache TTL is `43200` seconds (12 hours).
-- Override cache TTL with `LLMPRICE_CACHE_TIMEOUT`.
-- Override pricing source with `LLMPRICE_PRICING_URL`.
-- Set fallback currency label with `LLMPRICE_CURRENCY` (used only when upstream omits currency).
+- Override cache TTL with `LLMCALC_CACHE_TIMEOUT`.
+- Override pricing source with `LLMCALC_PRICING_URL`.
+- Set fallback currency label with `LLMCALC_CURRENCY` (used only when upstream omits currency).
 
 ## Release Validation
 

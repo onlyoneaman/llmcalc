@@ -1,4 +1,4 @@
-"""Typed exceptions for llmprice."""
+"""Typed exceptions for llmcalc."""
 
 
 class PricingError(Exception):

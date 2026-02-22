@@ -28,7 +28,7 @@ jobs:
         run: python -m ruff check .
 
       - name: Type check
-        run: python -m mypy llmprice
+        run: python -m mypy llmcalc
 
       - name: Test
         run: python -m pytest

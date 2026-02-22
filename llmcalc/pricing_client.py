@@ -7,15 +7,15 @@ from typing import Any
 
 import httpx
 
-from llmprice.cache import load_cached_pricing, save_cached_pricing
-from llmprice.config import (
+from llmcalc.cache import load_cached_pricing, save_cached_pricing
+from llmcalc.config import (
     DEFAULT_CACHE_TIMEOUT_SECONDS,
     get_default_currency,
     get_pricing_url,
     get_user_agent,
 )
-from llmprice.errors import PricingFetchError, PricingSchemaError
-from llmprice.models import ModelPricing, RawModelPricing
+from llmcalc.errors import PricingFetchError, PricingSchemaError
+from llmcalc.models import ModelPricing, RawModelPricing
 
 
 async def fetch_pricing_payload(pricing_url: str | None = None) -> dict[str, Any]:

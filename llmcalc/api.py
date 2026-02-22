@@ -1,15 +1,15 @@
-"""Public API for llmprice."""
+"""Public API for llmcalc."""
 
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Protocol, runtime_checkable
 
-from llmprice.cache import clear_cache as clear_cache_file
-from llmprice.config import DEFAULT_CACHE_TIMEOUT_SECONDS, resolve_cache_timeout
-from llmprice.models import CostBreakdown, ModelPricing
-from llmprice.normalize import resolve_model_key
-from llmprice.pricing_client import get_pricing_table
+from llmcalc.cache import clear_cache as clear_cache_file
+from llmcalc.config import DEFAULT_CACHE_TIMEOUT_SECONDS, resolve_cache_timeout
+from llmcalc.models import CostBreakdown, ModelPricing
+from llmcalc.normalize import resolve_model_key
+from llmcalc.pricing_client import get_pricing_table
 
 DEFAULT_ROUNDING_PLACES = 6
 

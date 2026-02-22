@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from importlib import metadata
 
-APP_NAME = "llmprice"
+APP_NAME = "llmcalc"
 FALLBACK_VERSION = "0.1.0"
 DEFAULT_CACHE_TIMEOUT_SECONDS = 43200
 DEFAULT_CURRENCY = "USD"
@@ -29,12 +29,12 @@ def get_user_agent() -> str:
 
 def get_pricing_url(explicit_url: str | None = None) -> str:
     """Resolve pricing source URL from explicit arg, env var, then default."""
-    return explicit_url or os.getenv("LLMPRICE_PRICING_URL") or DEFAULT_PRICING_URL
+    return explicit_url or os.getenv("LLMCALC_PRICING_URL") or DEFAULT_PRICING_URL
 
 
 def get_default_currency() -> str:
     """Resolve fallback currency label from env var or default."""
-    raw = os.getenv("LLMPRICE_CURRENCY", "").strip().upper()
+    raw = os.getenv("LLMCALC_CURRENCY", "").strip().upper()
     return raw or DEFAULT_CURRENCY
 
 
@@ -45,7 +45,7 @@ def resolve_cache_timeout(cache_timeout: int | None = None) -> int:
             raise ValueError("cache_timeout must be positive")
         return cache_timeout
 
-    env_value = os.getenv("LLMPRICE_CACHE_TIMEOUT")
+    env_value = os.getenv("LLMCALC_CACHE_TIMEOUT")
     if env_value is None:
         return DEFAULT_CACHE_TIMEOUT_SECONDS
 

@@ -9,7 +9,7 @@ from typing import Any
 
 from platformdirs import user_cache_dir
 
-CACHE_DIR_NAME = "llmprice"
+CACHE_DIR_NAME = "llmcalc"
 CACHE_FILE_NAME = "pricing_cache.json"
 
 

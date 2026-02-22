@@ -3,8 +3,8 @@ from decimal import Decimal
 
 import pytest
 
-import llmprice.api as api
-from llmprice.models import ModelPricing
+import llmcalc.api as api
+from llmcalc.models import ModelPricing
 
 
 async def _fake_pricing_table(cache_timeout: int = 86400):
@@ -86,7 +86,7 @@ async def test_get_model_costs_uses_env_cache_timeout(monkeypatch) -> None:
         return await _fake_pricing_table(cache_timeout=cache_timeout)
 
     monkeypatch.setattr(api, "get_pricing_table", _capture)
-    monkeypatch.setenv("LLMPRICE_CACHE_TIMEOUT", "1800")
+    monkeypatch.setenv("LLMCALC_CACHE_TIMEOUT", "1800")
 
     await api.get_model_costs("gpt-4o-mini")
     assert captured["cache_timeout"] == 1800
@@ -101,7 +101,7 @@ async def test_get_model_costs_invalid_env_cache_timeout_falls_back(monkeypatch)
         return await _fake_pricing_table(cache_timeout=cache_timeout)
 
     monkeypatch.setattr(api, "get_pricing_table", _capture)
-    monkeypatch.setenv("LLMPRICE_CACHE_TIMEOUT", "bad-value")
+    monkeypatch.setenv("LLMCALC_CACHE_TIMEOUT", "bad-value")
 
     await api.get_model_costs("gpt-4o-mini")
     assert captured["cache_timeout"] == api.DEFAULT_CACHE_TIMEOUT
