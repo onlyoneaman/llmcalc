@@ -5,7 +5,7 @@ export const FALLBACK_VERSION = "0.1.2";
 export const DEFAULT_CACHE_TIMEOUT_SECONDS = 43200;
 export const DEFAULT_CURRENCY = "USD";
 export const DEFAULT_PRICING_URL =
-  "https://raw.githubusercontent.com/llmlite/llmlite/main/model_prices_and_context_window.json";
+  "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
 
 let cachedVersion: string | null = null;
 

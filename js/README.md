@@ -1,6 +1,6 @@
 # llmcalc
 
-`llmcalc` is a native JavaScript/TypeScript implementation for estimating LLM token costs from `llmlite` pricing data.
+`llmcalc` is a native JavaScript/TypeScript implementation for estimating LLM token costs from `litellm` pricing data.
 
 ## Install
 

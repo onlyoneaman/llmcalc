@@ -33,7 +33,7 @@ class ModelPricing(BaseModel):
 
 
 class RawModelPricing(BaseModel):
-    """Flexible upstream schema model from llmlite pricing JSON."""
+    """Flexible upstream schema model from litellm pricing JSON."""
 
     input_cost_per_token: Decimal | None = None
     output_cost_per_token: Decimal | None = None

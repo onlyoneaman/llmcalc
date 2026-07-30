@@ -1,4 +1,4 @@
-"""Pricing data fetch and normalization against llmlite pricing source."""
+"""Pricing data fetch and normalization against litellm pricing source."""
 
 from __future__ import annotations
 

@@ -30,7 +30,7 @@ npm install llmcalc
 
 `total = (input_tokens * input_price_per_token) + (output_tokens * output_price_per_token)`
 
-Pricing is pulled from [`llmlite`](https://github.com/llmlite/llmlite) model pricing data and cached locally.
+Pricing is pulled from [`litellm`](https://github.com/BerriAI/litellm) model pricing data and cached locally.
 
 ## Python Quickstart
 

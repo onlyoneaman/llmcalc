@@ -2,7 +2,7 @@
 
 ## Project
 - Name: `llmcalc`
-- Purpose: Calculate LLM token costs from `llmlite` pricing data.
+- Purpose: Calculate LLM token costs from `litellm` pricing data.
 - Runtime:
   - Python `>=3.11` (PyPI package)
   - Node `>=20` (npm package in `js/`)
