@@ -27,7 +27,7 @@ def normalize_model_name(model: str) -> str:
 
     if ":" in normalized:
         provider, suffix = normalized.split(":", 1)
-        if provider and suffix:
+        if provider in PROVIDER_PREFIXES and suffix:
             normalized = suffix
 
     if "/" in normalized:
