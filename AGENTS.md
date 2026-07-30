@@ -2,7 +2,7 @@
 
 ## Project
 - Name: `llmcalc`
-- Purpose: Calculate LLM token costs from `llmlite` pricing data.
+- Purpose: Calculate LLM token costs from `litellm` pricing data.
 - Runtime:
   - Python `>=3.11` (PyPI package)
   - Node `>=20` (npm package in `js/`)
@@ -14,9 +14,17 @@
 - Parity includes:
   - Public API surface and semantics (cost/model/usage helpers, cache clear behavior).
   - CLI commands and flags (`quote`, `model`, `cache clear`, `--version`, `-v`).
-  - Default config and env vars (`LLMCALC_CACHE_TIMEOUT`, `LLMCALC_PRICING_URL`, `LLMCALC_CURRENCY`).
+  - Default config and env vars (`LLMCALC_CACHE_TIMEOUT`, `LLMCALC_PRICING_URL`, `LLMCALC_CURRENCY`, `LLMCALC_CACHE_PATH`).
   - Pricing normalization/alias behavior and deterministic rounding expectations.
   - Error behavior for invalid input and missing models.
+  - Serialized output: both CLIs must emit identical JSON, including `null` vs `""` and plain-vs-scientific decimal notation.
+- Parity is mechanically enforced, not just aspirational:
+  - `tests/fixtures/tiered_cases.json` is the shared contract. Both suites read it and assert identical costs. Add a case there *before* adding pricing behavior to either package.
+  - `tests/test_parity.py` diffs both CLIs' JSON output for the same arguments. It runs offline via a seeded cache and needs `cd js && npm run build` first.
+- Known cross-language traps, each of which has already shipped as a bug:
+  - JS `split(sep, n)` limits *returned elements* and discards the rest; Python's `split(sep, n)` limits *splits* and keeps the remainder. Use an explicit split-once helper.
+  - `str(Decimal)` gives `7.5E-8` where decimal.js `toString()` gives `7.5e-8`. Use `format(value, "f")` and `.toFixed()` for plain notation.
+  - Python `bool` subclasses `int`, so `isinstance(True, int)` passes. Use `type(v) is int` for token counts.
 
 ## Code Style
 - Keep modules small and composable.

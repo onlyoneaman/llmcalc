@@ -3,6 +3,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Decimal } from "decimal.js";
+
 import { cost, model, clearCache } from "./api.js";
 import { getPackageVersion } from "./config.js";
 
@@ -47,6 +49,19 @@ function parseArgs(args: string[]): { flags: Set<string>; values: Map<string, st
   return { flags, values };
 }
 
+function parseOptionalIntOption(raw: string | undefined, name: string): number {
+  if (raw === undefined) {
+    return 0;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+
+  return parsed;
+}
+
 function parseIntOption(raw: string | undefined, name: string): number {
   if (raw === undefined) {
     throw new Error(`Missing required option ${name}`);
@@ -73,15 +88,32 @@ function parseCacheTimeout(raw: string | undefined): number | undefined {
   return parsed;
 }
 
-function emit(data: Record<string, string>, asJson: boolean, out: (message: string) => void): void {
+type EmitValue = string | number | string[] | null;
+
+function emit(
+  data: Record<string, EmitValue>,
+  asJson: boolean,
+  out: (message: string) => void
+): void {
   if (asJson) {
     out(JSON.stringify(data));
     return;
   }
 
   for (const [key, value] of Object.entries(data)) {
-    out(`${key}: ${value}`);
+    out(`${key}: ${value === null ? "None" : value}`);
   }
+}
+
+/**
+ * Render a per-token rate in plain decimal notation.
+ *
+ * `toString()` yields `"7.5e-8"` for small values, where Python's
+ * `str(Decimal)` yields `"7.5E-8"`. Both CLIs emit plain notation so their
+ * JSON output matches.
+ */
+function rate(value: Decimal | null): string | null {
+  return value === null ? null : value.toFixed();
 }
 
 export async function main(argv: string[], printer: Printer = {
@@ -115,14 +147,20 @@ export async function main(argv: string[], printer: Printer = {
 
     const inputTokens = parseIntOption(values.get("--input"), "--input");
     const outputTokens = parseIntOption(values.get("--output"), "--output");
+    const cachedTokens = parseOptionalIntOption(values.get("--cached"), "--cached");
+    const cacheCreationTokens = parseOptionalIntOption(
+      values.get("--cache-creation"),
+      "--cache-creation"
+    );
+    const reasoningTokens = parseOptionalIntOption(values.get("--reasoning"), "--reasoning");
     const cacheTimeout = parseCacheTimeout(values.get("--cache-timeout"));
 
-    const result = await cost(
-      modelName,
-      inputTokens,
-      outputTokens,
-      cacheTimeout !== undefined ? { cacheTimeout } : {}
-    );
+    const result = await cost(modelName, inputTokens, outputTokens, {
+      ...(cacheTimeout !== undefined ? { cacheTimeout } : {}),
+      cachedTokens,
+      cacheCreationTokens,
+      reasoningTokens
+    });
     if (result === null) {
       printer.err(`Model not found: ${modelName}`);
       return 1;
@@ -134,7 +172,11 @@ export async function main(argv: string[], printer: Printer = {
         input_cost: result.inputCost.toFixed(6),
         output_cost: result.outputCost.toFixed(6),
         total_cost: result.totalCost.toFixed(6),
-        currency: result.currency
+        currency: result.currency,
+        tier_applied: result.tierApplied,
+        cache_read_cost: result.cacheReadCost.toFixed(6),
+        cache_creation_cost: result.cacheCreationCost.toFixed(6),
+        reasoning_cost: result.reasoningCost.toFixed(6)
       },
       flags.has("--json"),
       printer.out
@@ -159,11 +201,13 @@ export async function main(argv: string[], printer: Printer = {
     emit(
       {
         model: result.model,
-        input_cost_per_token: result.inputCostPerToken.toString(),
-        output_cost_per_token: result.outputCostPerToken.toString(),
+        input_cost_per_token: rate(result.inputCostPerToken),
+        output_cost_per_token: rate(result.outputCostPerToken),
+        thresholds: result.thresholds.map((threshold) => threshold.key),
+        tier_count: result.tieredPricing.length,
         currency: result.currency,
-        provider: result.provider ?? "",
-        last_updated: result.lastUpdated ?? ""
+        provider: result.provider,
+        last_updated: result.lastUpdated
       },
       flags.has("--json"),
       printer.out

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,10 @@ CACHE_FILE_NAME = "pricing_cache.json"
 
 
 def cache_file_path() -> Path:
+    override = os.getenv("LLMCALC_CACHE_PATH")
+    if override:
+        return Path(override)
+
     base_dir = Path(user_cache_dir(appname=CACHE_DIR_NAME, appauthor=CACHE_DIR_NAME))
     return base_dir / CACHE_FILE_NAME
 

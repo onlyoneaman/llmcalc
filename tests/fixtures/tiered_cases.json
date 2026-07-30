@@ -1,0 +1,695 @@
+{
+  "thresholds": [
+    {
+      "name": "below threshold uses base rates",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.500000",
+        "output_cost": "0.030000",
+        "total_cost": "0.530000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "exactly at threshold uses base rates",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045"
+      },
+      "input_tokens": 272000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "1.360000",
+        "output_cost": "0.030000",
+        "total_cost": "1.390000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "one token above threshold uses premium rates",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045"
+      },
+      "input_tokens": 272001,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "2.720010",
+        "output_cost": "0.045000",
+        "total_cost": "2.765010",
+        "tier_applied": "above_272k_tokens"
+      }
+    },
+    {
+      "name": "gpt-5.5 at 300k in 5k out",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045"
+      },
+      "input_tokens": 300000,
+      "output_tokens": 5000,
+      "expected": {
+        "input_cost": "3.000000",
+        "output_cost": "0.225000",
+        "total_cost": "3.225000",
+        "tier_applied": "above_272k_tokens"
+      }
+    },
+    {
+      "name": "input threshold without output threshold keeps base output rate",
+      "pricing": {
+        "input_cost_per_token": "0.000000075",
+        "output_cost_per_token": "0",
+        "input_cost_per_token_above_128k_tokens": "0.00000015"
+      },
+      "input_tokens": 200000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.030000",
+        "output_cost": "0.000000",
+        "total_cost": "0.030000",
+        "tier_applied": "above_128k_tokens"
+      }
+    },
+    {
+      "name": "service tier suffixed keys are ignored",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_200k_tokens_priority": "0.0001",
+        "output_cost_per_token_above_200k_tokens_priority": "0.0009"
+      },
+      "input_tokens": 300000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "1.500000",
+        "output_cost": "0.030000",
+        "total_cost": "1.530000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "highest matching threshold wins",
+      "pricing": {
+        "input_cost_per_token": "0.000001",
+        "output_cost_per_token": "0.000002",
+        "input_cost_per_token_above_128k_tokens": "0.000002",
+        "output_cost_per_token_above_128k_tokens": "0.000004",
+        "input_cost_per_token_above_272k_tokens": "0.000004",
+        "output_cost_per_token_above_272k_tokens": "0.000008"
+      },
+      "input_tokens": 300000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "1.200000",
+        "output_cost": "0.008000",
+        "total_cost": "1.208000",
+        "tier_applied": "above_272k_tokens"
+      }
+    },
+    {
+      "name": "input between two thresholds picks the lower one",
+      "pricing": {
+        "input_cost_per_token": "0.000001",
+        "output_cost_per_token": "0.000002",
+        "input_cost_per_token_above_128k_tokens": "0.000002",
+        "output_cost_per_token_above_128k_tokens": "0.000004",
+        "input_cost_per_token_above_272k_tokens": "0.000004",
+        "output_cost_per_token_above_272k_tokens": "0.000008"
+      },
+      "input_tokens": 200000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.400000",
+        "output_cost": "0.004000",
+        "total_cost": "0.404000",
+        "tier_applied": "above_128k_tokens"
+      }
+    },
+    {
+      "name": "non-k threshold parses as a literal token count",
+      "pricing": {
+        "input_cost_per_token": "0.000001",
+        "output_cost_per_token": "0.000002",
+        "input_cost_per_token_above_128_tokens": "0.000002",
+        "output_cost_per_token_above_128_tokens": "0.000004"
+      },
+      "input_tokens": 200,
+      "output_tokens": 100,
+      "expected": {
+        "input_cost": "0.000400",
+        "output_cost": "0.000400",
+        "total_cost": "0.000800",
+        "tier_applied": "above_128_tokens"
+      }
+    },
+    {
+      "name": "zero input tokens uses base rates",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045"
+      },
+      "input_tokens": 0,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.000000",
+        "output_cost": "0.030000",
+        "total_cost": "0.030000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "large output with small input does not trigger the threshold",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045"
+      },
+      "input_tokens": 100,
+      "output_tokens": 500000,
+      "expected": {
+        "input_cost": "0.000500",
+        "output_cost": "15.000000",
+        "total_cost": "15.000500",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "untiered model is unaffected",
+      "pricing": {
+        "input_cost_per_token": "0.0000025",
+        "output_cost_per_token": "0.00001"
+      },
+      "input_tokens": 1000000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "2.500000",
+        "output_cost": "0.010000",
+        "total_cost": "2.510000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "unparseable threshold key is ignored and base rates still apply",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_above_abc_tokens": "0.00001"
+      },
+      "input_tokens": 300000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "1.500000",
+        "output_cost": "0.030000",
+        "total_cost": "1.530000",
+        "tier_applied": null
+      }
+    }
+  ],
+  "cache_and_reasoning": [
+    {
+      "name": "cached tokens re-priced at the cache read rate",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "cache_read_input_token_cost": "0.0000005"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "cached_tokens": 90000,
+      "expected": {
+        "input_cost": "0.095000",
+        "output_cost": "0.030000",
+        "total_cost": "0.125000",
+        "cache_read_cost": "0.045000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "cache creation billed at its own higher rate",
+      "pricing": {
+        "input_cost_per_token": "0.000003",
+        "output_cost_per_token": "0.000015",
+        "cache_read_input_token_cost": "0.0000003",
+        "cache_creation_input_token_cost": "0.00000375"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 500,
+      "cache_creation_tokens": 2000,
+      "expected": {
+        "input_cost": "0.301500",
+        "output_cost": "0.007500",
+        "total_cost": "0.309000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.007500",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "cached tokens fall back to the input rate when undeclared",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "cached_tokens": 90000,
+      "expected": {
+        "input_cost": "0.500000",
+        "output_cost": "0.030000",
+        "total_cost": "0.530000",
+        "cache_read_cost": "0.450000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "reasoning tokens billed at their own rate",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "output_cost_per_reasoning_token": "0.00006"
+      },
+      "input_tokens": 1000,
+      "output_tokens": 5000,
+      "reasoning_tokens": 4000,
+      "expected": {
+        "input_cost": "0.005000",
+        "output_cost": "0.270000",
+        "total_cost": "0.275000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.240000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "reasoning tokens fall back to the output rate when undeclared",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_tokens": 1000,
+      "output_tokens": 5000,
+      "reasoning_tokens": 4000,
+      "expected": {
+        "input_cost": "0.005000",
+        "output_cost": "0.150000",
+        "total_cost": "0.155000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.120000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "threshold swaps the cache read rate as well",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "cache_read_input_token_cost": "0.0000005",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045",
+        "cache_read_input_token_cost_above_272k_tokens": "0.000001"
+      },
+      "input_tokens": 300000,
+      "output_tokens": 1000,
+      "cached_tokens": 100000,
+      "expected": {
+        "input_cost": "2.100000",
+        "output_cost": "0.045000",
+        "total_cost": "2.145000",
+        "cache_read_cost": "0.100000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": "above_272k_tokens"
+      }
+    },
+    {
+      "name": "graduated tiers price cache reads from their own tier rate",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 32000],
+            "input_cost_per_token": "0.0000003",
+            "output_cost_per_token": "0.0000015",
+            "cache_read_input_token_cost": "0.00000008"
+          },
+          {
+            "range": [32000, 128000],
+            "input_cost_per_token": "0.0000005",
+            "output_cost_per_token": "0.0000025",
+            "cache_read_input_token_cost": "0.00000012"
+          }
+        ]
+      },
+      "input_tokens": 50000,
+      "output_tokens": 1000,
+      "cached_tokens": 20000,
+      "expected": {
+        "input_cost": "0.010600",
+        "output_cost": "0.001500",
+        "total_cost": "0.012100",
+        "cache_read_cost": "0.001600",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "input_cost_per_token_cache_hit is used as the cache read rate",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_cache_hit": "0.000001"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "cached_tokens": 90000,
+      "expected": {
+        "input_cost": "0.140000",
+        "output_cost": "0.030000",
+        "total_cost": "0.170000",
+        "cache_read_cost": "0.090000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "zero cache and reasoning tokens match a plain call",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "cache_read_input_token_cost": "0.0000005"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.500000",
+        "output_cost": "0.030000",
+        "total_cost": "0.530000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    }
+  ],
+  "graduated": [
+    {
+      "name": "wholly inside the first tier",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 256000],
+            "input_cost_per_token": "0.00000005",
+            "output_cost_per_token": "0.0000004"
+          },
+          {
+            "range": [256000, 1000000],
+            "input_cost_per_token": "0.00000025",
+            "output_cost_per_token": "0.000002"
+          }
+        ]
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.005000",
+        "output_cost": "0.000400",
+        "total_cost": "0.005400",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "spans two tiers",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 256000],
+            "input_cost_per_token": "0.00000005",
+            "output_cost_per_token": "0.0000004"
+          },
+          {
+            "range": [256000, 1000000],
+            "input_cost_per_token": "0.00000025",
+            "output_cost_per_token": "0.000002"
+          }
+        ]
+      },
+      "input_tokens": 300000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.023800",
+        "output_cost": "0.000400",
+        "total_cost": "0.024200",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "exactly on a tier boundary stays in the lower tier",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 256000],
+            "input_cost_per_token": "0.00000005",
+            "output_cost_per_token": "0.0000004"
+          },
+          {
+            "range": [256000, 1000000],
+            "input_cost_per_token": "0.00000025",
+            "output_cost_per_token": "0.000002"
+          }
+        ]
+      },
+      "input_tokens": 256000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.012800",
+        "output_cost": "0.000400",
+        "total_cost": "0.013200",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "overflow past the last range bills at the last tier rate",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 256000],
+            "input_cost_per_token": "0.00000005",
+            "output_cost_per_token": "0.0000004"
+          },
+          {
+            "range": [256000, 1000000],
+            "input_cost_per_token": "0.00000025",
+            "output_cost_per_token": "0.000002"
+          }
+        ]
+      },
+      "input_tokens": 1200000,
+      "output_tokens": 0,
+      "expected": {
+        "input_cost": "0.248800",
+        "output_cost": "0.000000",
+        "total_cost": "0.248800",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "zero tokens cost zero",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 256000],
+            "input_cost_per_token": "0.00000005",
+            "output_cost_per_token": "0.0000004"
+          }
+        ]
+      },
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "expected": {
+        "input_cost": "0.000000",
+        "output_cost": "0.000000",
+        "total_cost": "0.000000",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "input and output tiers resolve independently",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 100000],
+            "input_cost_per_token": "0.000001",
+            "output_cost_per_token": "0.00001"
+          },
+          {
+            "range": [100000, 500000],
+            "input_cost_per_token": "0.000002",
+            "output_cost_per_token": "0.00002"
+          }
+        ]
+      },
+      "input_tokens": 150000,
+      "output_tokens": 50000,
+      "expected": {
+        "input_cost": "0.200000",
+        "output_cost": "0.500000",
+        "total_cost": "0.700000",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "four tiers with float ranges and extra keys",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 32000.0],
+            "input_cost_per_token": "0.0000003",
+            "output_cost_per_token": "0.0000015",
+            "cache_read_input_token_cost": "0.00000008"
+          },
+          {
+            "range": [32000.0, 128000.0],
+            "input_cost_per_token": "0.0000005",
+            "output_cost_per_token": "0.0000025",
+            "cache_read_input_token_cost": "0.00000012"
+          },
+          {
+            "range": [128000.0, 256000.0],
+            "input_cost_per_token": "0.0000008",
+            "output_cost_per_token": "0.000004",
+            "cache_read_input_token_cost": "0.0000002"
+          },
+          {
+            "range": [256000.0, 1000000.0],
+            "input_cost_per_token": "0.0000016",
+            "output_cost_per_token": "0.0000096",
+            "cache_read_input_token_cost": "0.0000004"
+          }
+        ]
+      },
+      "input_tokens": 200000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.115200",
+        "output_cost": "0.001500",
+        "total_cost": "0.116700",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "unsorted tiers are sorted before use",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [256000, 1000000],
+            "input_cost_per_token": "0.00000025",
+            "output_cost_per_token": "0.000002"
+          },
+          {
+            "range": [0, 256000],
+            "input_cost_per_token": "0.00000005",
+            "output_cost_per_token": "0.0000004"
+          }
+        ]
+      },
+      "input_tokens": 300000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.023800",
+        "output_cost": "0.000400",
+        "total_cost": "0.024200",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "single tier only",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 100000],
+            "input_cost_per_token": "0.000001",
+            "output_cost_per_token": "0.000002"
+          }
+        ]
+      },
+      "input_tokens": 50000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.050000",
+        "output_cost": "0.002000",
+        "total_cost": "0.052000",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "gap between ranges bills the remainder at the last tier rate",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 100],
+            "input_cost_per_token": "0.000001",
+            "output_cost_per_token": "0.000002"
+          },
+          {
+            "range": [200, 300],
+            "input_cost_per_token": "0.000003",
+            "output_cost_per_token": "0.000006"
+          }
+        ]
+      },
+      "input_tokens": 150,
+      "output_tokens": 0,
+      "expected": {
+        "input_cost": "0.000250",
+        "output_cost": "0.000000",
+        "total_cost": "0.000250",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "cheap rate below the rounding floor reports zero",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 256000],
+            "input_cost_per_token": "0.00000005",
+            "output_cost_per_token": "0.0000004"
+          }
+        ]
+      },
+      "input_tokens": 1,
+      "output_tokens": 0,
+      "expected": {
+        "input_cost": "0.000000",
+        "output_cost": "0.000000",
+        "total_cost": "0.000000",
+        "tier_applied": "tiered_pricing"
+      }
+    }
+  ]
+}

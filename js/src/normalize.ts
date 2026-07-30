@@ -11,24 +11,28 @@ export const PROVIDER_PREFIXES: ReadonlySet<string> = new Set([
   "mistral"
 ]);
 
+function splitOnce(value: string, separator: string): [string, string] | null {
+  const index = value.indexOf(separator);
+  if (index <= 0 || index === value.length - separator.length) {
+    return null;
+  }
+  return [value.slice(0, index), value.slice(index + separator.length)];
+}
+
 export function normalizeModelName(model: string): string {
   let normalized = model.trim().toLowerCase();
   if (normalized.length === 0) {
     throw new Error("model must not be empty");
   }
 
-  if (normalized.includes(":")) {
-    const [provider, suffix] = normalized.split(":", 2);
-    if (provider && suffix) {
-      normalized = suffix;
-    }
+  const colonParts = splitOnce(normalized, ":");
+  if (colonParts !== null && PROVIDER_PREFIXES.has(colonParts[0])) {
+    normalized = colonParts[1];
   }
 
-  if (normalized.includes("/")) {
-    const [provider, suffix] = normalized.split("/", 2);
-    if (provider && suffix && PROVIDER_PREFIXES.has(provider)) {
-      normalized = suffix;
-    }
+  const slashParts = splitOnce(normalized, "/");
+  if (slashParts !== null && PROVIDER_PREFIXES.has(slashParts[0])) {
+    normalized = slashParts[1];
   }
 
   return ALIASES[normalized] ?? normalized;

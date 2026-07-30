@@ -1,7 +1,7 @@
 {
   "name": "llmcalc",
-  "version": "0.1.2",
-  "description": "Calculate LLM token costs from llmlite pricing data",
+  "version": "0.2.0",
+  "description": "Calculate LLM token costs from litellm pricing data",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
