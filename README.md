@@ -32,6 +32,40 @@ npm install llmcalc
 
 Pricing is pulled from [`litellm`](https://github.com/BerriAI/litellm) model pricing data and cached locally.
 
+## Long-Context and Tiered Pricing
+
+Some models change price with request size, in two different ways:
+
+- **Threshold pricing.** Above a prompt-size cutoff, the whole request bills at a premium rate. OpenAI's cutoff is 272k tokens, Anthropic's 200k, Gemini's 128k. Crossing it changes the input *and* output rate. The trigger is input tokens only, and it is strictly greater, so a request of exactly the cutoff stays on base rates.
+- **Graduated pricing.** Tokens bill in slices, income-tax style: the first N at one rate, the next M at another.
+
+`tier_applied` tells you which one produced a price:
+
+```python
+from llmcalc import cost
+
+cost("gpt-5.5", 100_000, 5_000).tier_applied   # None -> base rates
+cost("gpt-5.5", 300_000, 5_000).tier_applied   # 'above_272k_tokens'
+cost("dashscope/qwen3-max", 300_000, 5_000).tier_applied  # 'tiered_pricing'
+```
+
+Models priced purely through graduated tiers publish no flat per-token rate, so
+`input_cost_per_token` and `output_cost_per_token` can be `None`.
+
+## Token Counts, Not Text
+
+llmcalc takes token counts. It does not accept strings or message arrays, and it
+does not tokenize — pass counts from your provider's `usage` response, which is
+what you are actually billed for. Both snake_case and camelCase usage keys work:
+
+```python
+from llmcalc import usage
+
+usage("gpt-5.5", response.usage)                          # provider object
+usage("gpt-5.5", {"prompt_tokens": 1000, "completion_tokens": 500})
+usage("gpt-5.5", {"inputTokens": 1000, "outputTokens": 500})
+```
+
 ## Python Quickstart
 
 ```python
