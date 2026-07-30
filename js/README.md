@@ -37,6 +37,34 @@ Some models change price with request size, in two different ways:
 Models priced purely through graduated tiers publish no flat per-token rate, so
 `inputCostPerToken` and `outputCostPerToken` can be `null`.
 
+## Cached and Reasoning Tokens
+
+Cache reads are typically 10x cheaper than fresh input, and cache *writes* can
+cost more than fresh input, so ignoring them skews a total badly in either
+direction. Pass the subsets and llmcalc prices each at its own rate:
+
+```ts
+await cost("gpt-5.5", 100_000, 1_000, { cachedTokens: 90_000 });
+//   10_000 fresh @ 5e-06   = 0.05
+//   90_000 cached @ 5e-07  = 0.045
+//    1_000 output @ 3e-05  = 0.03
+//   totalCost              = 0.125  (vs 0.53 if cached were billed as fresh)
+```
+
+`inputTokens` is the **total** prompt count, inclusive of `cachedTokens` and
+`cacheCreationTokens`; `outputTokens` is inclusive of `reasoningTokens`. Models
+that declare no cache or reasoning rate bill those tokens at the plain
+input/output rate, so passing the counts is always safe.
+
+`usage()` picks the subsets up automatically, and handles the fact that the two
+major providers use **opposite conventions** — OpenAI reports
+`prompt_tokens_details.cached_tokens` as part of `prompt_tokens`, while
+Anthropic reports `cache_read_input_tokens` *in addition to* `input_tokens`.
+
+`CostBreakdown` reports the components: `cacheReadCost`, `cacheCreationCost`,
+`reasoningCost`. `inputCost` and `outputCost` already include them, and
+`totalCost` is always their sum.
+
 ## Token Counts, Not Text
 
 llmcalc takes token counts. It does not accept strings or message arrays, and it
@@ -55,6 +83,7 @@ await usage("gpt-5.5", { inputTokens: 1000, outputTokens: 500 });
 
 ```bash
 llmcalc quote --model gpt-5.1 --input 1200 --output 800
+llmcalc quote --model gpt-5.5 --input 100000 --output 1000 --cached 90000
 llmcalc model --model gpt-5.1 --json
 llmcalc cache clear
 llmcalc --version

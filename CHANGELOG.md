@@ -15,6 +15,11 @@
 - The two CLIs stringified `Decimal` differently: `str(Decimal)` yields `7.5E-8` where JS `toString()` yields `7.5e-8`. Both now emit plain decimal notation. The JS `model` command also emitted `""` for absent `provider`/`last_updated` where Python emitted `null`.
 
 ### Added
+- **Cached and reasoning token pricing.** `cost()` takes `cached_tokens`, `cache_creation_tokens` and `reasoning_tokens` (JS: `cachedTokens`, `cacheCreationTokens`, `reasoningTokens` on the options object), each priced at its own rate with a fallback to the plain input/output rate. Covers 710 models with a cache-read rate, 243 with a cache-creation rate, and 53 with a reasoning rate; also reads DeepSeek's `input_cost_per_token_cache_hit` spelling. `input_tokens` is the total prompt count, inclusive of both cache subsets.
+- `usage()` now normalizes the two opposite provider conventions by key name rather than guessing: OpenAI reports `prompt_tokens_details.cached_tokens` as a **subset** of `prompt_tokens`, while Anthropic reports `cache_read_input_tokens` **in addition to** `input_tokens`. Previously a cache-heavy OpenAI call was over-billed ~4x and an Anthropic one under-billed ~3.5x.
+- `CostBreakdown.cache_read_cost`, `.cache_creation_cost`, `.reasoning_cost` (JS: `cacheReadCost`, `cacheCreationCost`, `reasoningCost`) so the components of a total are visible. `input_cost` and `output_cost` include them; `total_cost` is always their sum.
+- CLI `quote` gains `--cached`, `--cache-creation` and `--reasoning`, and reports the three component costs.
+- Threshold pricing now swaps the cache-read and cache-creation rates too, not just input/output, matching litellm.
 - `CostBreakdown.tier_applied` / `tierApplied`, naming the tier that produced a price (`above_272k_tokens`, `tiered_pricing`, or `None`).
 - `ModelPricing.thresholds` and `.tiered_pricing` / `.tieredPricing`.
 - CLI `quote` reports `tier_applied`; `model` reports `thresholds` and `tier_count`.
@@ -25,6 +30,7 @@
 
 ### Changed
 - **Breaking:** `ModelPricing.input_cost_per_token` and `.output_cost_per_token` are now optional, since tiered models publish no base rates. Consumers reading them directly must handle `None`.
+- `ModelPricing` gains `cache_read_cost_per_token`, `cache_creation_cost_per_token` and `reasoning_cost_per_token` (JS: camelCase equivalents).
 - Strings and message arrays now raise an error explaining that llmcalc takes token counts and does not tokenize. Token counts remain the only supported input.
 
 ## 0.1.2

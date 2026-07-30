@@ -6,6 +6,7 @@ import pytest
 
 from llmcalc.pricing_tiers import (
     graduated_cost,
+    parse_base_rates,
     parse_thresholds,
     parse_tiers,
     resolve_rates,
@@ -25,14 +26,11 @@ def test_threshold_rates(case: dict) -> None:
     pricing = case["pricing"]
     thresholds = parse_thresholds(pricing)
 
-    input_rate, output_rate, tier = resolve_rates(
-        _decimal_or_none(pricing.get("input_cost_per_token")),
-        _decimal_or_none(pricing.get("output_cost_per_token")),
-        thresholds,
-        case["input_tokens"],
-    )
+    rates, tier = resolve_rates(parse_base_rates(pricing), thresholds, case["input_tokens"])
 
     assert tier == case["expected"]["tier_applied"]
+    input_rate = rates.get("input")
+    output_rate = rates.get("output")
     assert input_rate is not None and output_rate is not None
 
     input_cost = (Decimal(case["input_tokens"]) * input_rate).quantize(Decimal("0.000001"))

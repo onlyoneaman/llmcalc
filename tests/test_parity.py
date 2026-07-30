@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import time
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,9 @@ SEED_DATA = {
         "output_cost_per_token": "0.00003",
         "input_cost_per_token_above_272k_tokens": "0.00001",
         "output_cost_per_token_above_272k_tokens": "0.000045",
+        "cache_read_input_token_cost": "0.0000005",
+        "cache_read_input_token_cost_above_272k_tokens": "0.000001",
+        "output_cost_per_reasoning_token": "0.00006",
         "currency": "USD",
     },
     "gpt-4o": {
@@ -55,6 +59,13 @@ SEED_DATA = {
         "input_cost_per_token_above_128k_tokens": "0.00000015",
         "currency": "USD",
     },
+    "claude-sonnet": {
+        "input_cost_per_token": "0.000003",
+        "output_cost_per_token": "0.000015",
+        "cache_read_input_token_cost": "0.0000003",
+        "cache_creation_input_token_cost": "0.00000375",
+        "currency": "USD",
+    },
 }
 
 QUOTE_CASES = [
@@ -71,6 +82,16 @@ QUOTE_CASES = [
 ]
 
 MODEL_CASES = ["gpt-5.5", "gpt-4o", "dashscope/qwen-flash", "gemini/gemini-1.5-flash"]
+
+# (model, input, output, cached, cache_creation, reasoning)
+CACHE_CASES = [
+    ("gpt-5.5", 100_000, 1_000, 90_000, 0, 0),
+    ("gpt-5.5", 300_000, 1_000, 100_000, 0, 0),
+    ("gpt-5.5", 1_000, 5_000, 0, 0, 4_000),
+    ("claude-sonnet", 100_000, 500, 90_000, 2_000, 0),
+    ("gpt-4o", 1_000, 500, 0, 0, 0),
+    ("dashscope/qwen-flash", 50_000, 1_000, 20_000, 0, 0),
+]
 
 requires_js = pytest.mark.skipif(
     shutil.which("node") is None or not JS_CLI.exists(),
@@ -129,3 +150,41 @@ def test_cli_model_is_identical_across_languages(seeded_cache: Path, model: str)
     # toString() gives '7.5e-8'. Both must emit plain decimal notation.
     python_payload, js_payload = _run_both(["model", "--model", model, "--json"], seeded_cache)
     assert python_payload == js_payload
+
+
+@requires_js
+@pytest.mark.parametrize(
+    "model,input_tokens,output_tokens,cached,creation,reasoning", CACHE_CASES
+)
+def test_cli_quote_with_cache_and_reasoning_is_identical(
+    seeded_cache: Path,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cached: int,
+    creation: int,
+    reasoning: int,
+) -> None:
+    args = [
+        "quote",
+        "--model",
+        model,
+        "--input",
+        str(input_tokens),
+        "--output",
+        str(output_tokens),
+        "--cached",
+        str(cached),
+        "--cache-creation",
+        str(creation),
+        "--reasoning",
+        str(reasoning),
+        "--json",
+    ]
+    python_payload, js_payload = _run_both(args, seeded_cache)
+    assert python_payload == js_payload
+
+    # The whole point: the total must equal the sum of its legs.
+    assert Decimal(python_payload["input_cost"]) + Decimal(
+        python_payload["output_cost"]
+    ) == Decimal(python_payload["total_cost"])

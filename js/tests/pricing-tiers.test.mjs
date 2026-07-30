@@ -8,8 +8,10 @@ import { Decimal } from "decimal.js";
 
 import {
   graduatedCost,
+  parseBaseRates,
   parseThresholds,
   parseTiers,
+  rateFor,
   resolveRates
 } from "../dist/pricing-tiers.js";
 
@@ -17,10 +19,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fixture = JSON.parse(
   readFileSync(join(here, "..", "..", "tests", "fixtures", "tiered_cases.json"), "utf8")
 );
-
-function decimalOrNull(value) {
-  return value === undefined || value === null ? null : new Decimal(String(value));
-}
 
 function money(value) {
   return value.toFixed(6, Decimal.ROUND_HALF_UP);
@@ -31,14 +29,15 @@ for (const testCase of fixture.thresholds) {
     const pricing = testCase.pricing;
     const thresholds = parseThresholds(pricing);
 
-    const [inputRate, outputRate, tier] = resolveRates(
-      decimalOrNull(pricing.input_cost_per_token),
-      decimalOrNull(pricing.output_cost_per_token),
+    const [rates, tier] = resolveRates(
+      parseBaseRates(pricing),
       thresholds,
       testCase.input_tokens
     );
 
     assert.equal(tier, testCase.expected.tier_applied);
+    const inputRate = rateFor(rates, "input");
+    const outputRate = rateFor(rates, "output");
     assert.ok(inputRate !== null && outputRate !== null);
     assert.equal(
       money(new Decimal(testCase.input_tokens).mul(inputRate)),

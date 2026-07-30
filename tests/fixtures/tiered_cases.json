@@ -222,6 +222,200 @@
       }
     }
   ],
+  "cache_and_reasoning": [
+    {
+      "name": "cached tokens re-priced at the cache read rate",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "cache_read_input_token_cost": "0.0000005"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "cached_tokens": 90000,
+      "expected": {
+        "input_cost": "0.095000",
+        "output_cost": "0.030000",
+        "total_cost": "0.125000",
+        "cache_read_cost": "0.045000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "cache creation billed at its own higher rate",
+      "pricing": {
+        "input_cost_per_token": "0.000003",
+        "output_cost_per_token": "0.000015",
+        "cache_read_input_token_cost": "0.0000003",
+        "cache_creation_input_token_cost": "0.00000375"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 500,
+      "cache_creation_tokens": 2000,
+      "expected": {
+        "input_cost": "0.301500",
+        "output_cost": "0.007500",
+        "total_cost": "0.309000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.007500",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "cached tokens fall back to the input rate when undeclared",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "cached_tokens": 90000,
+      "expected": {
+        "input_cost": "0.500000",
+        "output_cost": "0.030000",
+        "total_cost": "0.530000",
+        "cache_read_cost": "0.450000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "reasoning tokens billed at their own rate",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "output_cost_per_reasoning_token": "0.00006"
+      },
+      "input_tokens": 1000,
+      "output_tokens": 5000,
+      "reasoning_tokens": 4000,
+      "expected": {
+        "input_cost": "0.005000",
+        "output_cost": "0.270000",
+        "total_cost": "0.275000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.240000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "reasoning tokens fall back to the output rate when undeclared",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003"
+      },
+      "input_tokens": 1000,
+      "output_tokens": 5000,
+      "reasoning_tokens": 4000,
+      "expected": {
+        "input_cost": "0.005000",
+        "output_cost": "0.150000",
+        "total_cost": "0.155000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.120000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "threshold swaps the cache read rate as well",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "cache_read_input_token_cost": "0.0000005",
+        "input_cost_per_token_above_272k_tokens": "0.00001",
+        "output_cost_per_token_above_272k_tokens": "0.000045",
+        "cache_read_input_token_cost_above_272k_tokens": "0.000001"
+      },
+      "input_tokens": 300000,
+      "output_tokens": 1000,
+      "cached_tokens": 100000,
+      "expected": {
+        "input_cost": "2.100000",
+        "output_cost": "0.045000",
+        "total_cost": "2.145000",
+        "cache_read_cost": "0.100000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": "above_272k_tokens"
+      }
+    },
+    {
+      "name": "graduated tiers price cache reads from their own tier rate",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 32000],
+            "input_cost_per_token": "0.0000003",
+            "output_cost_per_token": "0.0000015",
+            "cache_read_input_token_cost": "0.00000008"
+          },
+          {
+            "range": [32000, 128000],
+            "input_cost_per_token": "0.0000005",
+            "output_cost_per_token": "0.0000025",
+            "cache_read_input_token_cost": "0.00000012"
+          }
+        ]
+      },
+      "input_tokens": 50000,
+      "output_tokens": 1000,
+      "cached_tokens": 20000,
+      "expected": {
+        "input_cost": "0.010600",
+        "output_cost": "0.001500",
+        "total_cost": "0.012100",
+        "cache_read_cost": "0.001600",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": "tiered_pricing"
+      }
+    },
+    {
+      "name": "input_cost_per_token_cache_hit is used as the cache read rate",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "input_cost_per_token_cache_hit": "0.000001"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "cached_tokens": 90000,
+      "expected": {
+        "input_cost": "0.140000",
+        "output_cost": "0.030000",
+        "total_cost": "0.170000",
+        "cache_read_cost": "0.090000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    },
+    {
+      "name": "zero cache and reasoning tokens match a plain call",
+      "pricing": {
+        "input_cost_per_token": "0.000005",
+        "output_cost_per_token": "0.00003",
+        "cache_read_input_token_cost": "0.0000005"
+      },
+      "input_tokens": 100000,
+      "output_tokens": 1000,
+      "expected": {
+        "input_cost": "0.500000",
+        "output_cost": "0.030000",
+        "total_cost": "0.530000",
+        "cache_read_cost": "0.000000",
+        "cache_creation_cost": "0.000000",
+        "reasoning_cost": "0.000000",
+        "tier_applied": null
+      }
+    }
+  ],
   "graduated": [
     {
       "name": "wholly inside the first tier",

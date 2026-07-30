@@ -30,6 +30,11 @@ npm install llmcalc
 
 `total = (input_tokens * input_price_per_token) + (output_tokens * output_price_per_token)`
 
+That is the simple case. Where a model prices long context, cached tokens or
+reasoning tokens differently, llmcalc applies those rates too — see the two
+sections below. `total_cost` is always the sum of `input_cost` and
+`output_cost`, whichever rates applied.
+
 Pricing is pulled from [`litellm`](https://github.com/BerriAI/litellm) model pricing data and cached locally.
 
 ## Long-Context and Tiered Pricing
@@ -51,6 +56,41 @@ cost("dashscope/qwen3-max", 300_000, 5_000).tier_applied  # 'tiered_pricing'
 
 Models priced purely through graduated tiers publish no flat per-token rate, so
 `input_cost_per_token` and `output_cost_per_token` can be `None`.
+
+## Cached and Reasoning Tokens
+
+Cache reads are typically 10x cheaper than fresh input, and cache *writes* can
+cost more than fresh input, so ignoring them skews a total badly in either
+direction. Pass the subsets and llmcalc prices each at its own rate:
+
+```python
+from llmcalc import cost
+
+cost("gpt-5.5", 100_000, 1_000, cached_tokens=90_000)
+#   10_000 fresh @ 5e-06   = 0.05
+#   90_000 cached @ 5e-07  = 0.045
+#    1_000 output @ 3e-05  = 0.03
+#   total_cost             = 0.125   (vs 0.53 if cached were billed as fresh)
+```
+
+`input_tokens` is the **total** prompt count, inclusive of `cached_tokens` and
+`cache_creation_tokens`; `output_tokens` is inclusive of `reasoning_tokens`.
+Models that declare no cache or reasoning rate simply bill those tokens at the
+plain input/output rate, so passing the counts is always safe.
+
+`usage()` picks the subsets up automatically, and handles the fact that the two
+major providers use **opposite conventions** — OpenAI reports
+`prompt_tokens_details.cached_tokens` as part of `prompt_tokens`, while
+Anthropic reports `cache_read_input_tokens` *in addition to* `input_tokens`:
+
+```python
+usage("gpt-5.5", openai_response.usage)        # cached is a subset
+usage("claude-sonnet-4-5", anthropic_response.usage)  # cache is additive
+```
+
+`CostBreakdown` reports the components: `cache_read_cost`,
+`cache_creation_cost`, `reasoning_cost`. `input_cost` and `output_cost` already
+include them, and `total_cost` is always their sum.
 
 ## Token Counts, Not Text
 
@@ -99,6 +139,7 @@ if (result !== null) {
 ```bash
 # cost quote from token counts
 llmcalc quote --model gpt-5.1 --input 1200 --output 800
+llmcalc quote --model gpt-5.5 --input 100000 --output 1000 --cached 90000
 
 # inspect per-token pricing for one model
 llmcalc model --model gpt-5.1 --json
@@ -124,7 +165,6 @@ llmcalc -v
 - `LLMCALC_PRICING_URL`: override pricing source URL
 - `LLMCALC_CURRENCY`: fallback currency label if upstream omits currency
 - `LLMCALC_CACHE_PATH`: override the cache file location (default: platform cache dir)
-- `LLMCALC_CACHE_PATH`: optional cache file path override (JavaScript package)
 
 ## Maintainers
 

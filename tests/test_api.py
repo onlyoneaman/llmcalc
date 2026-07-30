@@ -174,8 +174,8 @@ def test_bool_token_counts_are_rejected() -> None:
 
 
 def test_camel_case_usage_keys_are_accepted() -> None:
-    assert api._get_usage_tokens({"inputTokens": 10, "outputTokens": 5}) == (10, 5)
-    assert api._get_usage_tokens({"promptTokens": 7, "completionTokens": 3}) == (7, 3)
+    assert api._get_usage_tokens({"inputTokens": 10, "outputTokens": 5}) == (10, 5, 0, 0, 0)
+    assert api._get_usage_tokens({"promptTokens": 7, "completionTokens": 3}) == (7, 3, 0, 0, 0)
 
 
 def test_string_usage_explains_that_text_is_unsupported() -> None:
@@ -284,3 +284,142 @@ async def test_unknown_model_returns_none(monkeypatch) -> None:
 
     monkeypatch.setattr(api, "get_pricing_table", _table)
     assert await api.cost_async("test-model", 10, 5) is None
+
+
+@pytest.mark.parametrize(
+    "case", FIXTURE["cache_and_reasoning"], ids=lambda c: c["name"]
+)
+async def test_cache_and_reasoning_matches_fixture(monkeypatch, case: dict) -> None:
+    _stub_table(monkeypatch, case["pricing"])
+
+    result = await api.cost_async(
+        "test-model",
+        case["input_tokens"],
+        case["output_tokens"],
+        cached_tokens=case.get("cached_tokens", 0),
+        cache_creation_tokens=case.get("cache_creation_tokens", 0),
+        reasoning_tokens=case.get("reasoning_tokens", 0),
+    )
+
+    assert result is not None
+    expected = case["expected"]
+    assert str(result.input_cost) == expected["input_cost"]
+    assert str(result.output_cost) == expected["output_cost"]
+    assert str(result.total_cost) == expected["total_cost"]
+    assert str(result.cache_read_cost) == expected["cache_read_cost"]
+    assert str(result.cache_creation_cost) == expected["cache_creation_cost"]
+    assert str(result.reasoning_cost) == expected["reasoning_cost"]
+    assert result.tier_applied == expected["tier_applied"]
+    # The invariant that answers "is the total adding it up right?"
+    assert result.input_cost + result.output_cost == result.total_cost
+
+
+async def test_openai_usage_shape_treats_cached_as_a_subset(monkeypatch) -> None:
+    _stub_table(
+        monkeypatch,
+        {
+            "input_cost_per_token": "0.000005",
+            "output_cost_per_token": "0.00003",
+            "cache_read_input_token_cost": "0.0000005",
+        },
+    )
+
+    result = await api.usage_async(
+        "test-model",
+        {
+            "prompt_tokens": 100_000,
+            "completion_tokens": 1_000,
+            "prompt_tokens_details": {"cached_tokens": 90_000},
+        },
+    )
+
+    assert result is not None
+    assert str(result.total_cost) == "0.125000"
+    assert str(result.cache_read_cost) == "0.045000"
+
+
+async def test_anthropic_usage_shape_treats_cache_as_additive(monkeypatch) -> None:
+    _stub_table(
+        monkeypatch,
+        {
+            "input_cost_per_token": "0.000003",
+            "output_cost_per_token": "0.000015",
+            "cache_read_input_token_cost": "0.0000003",
+            "cache_creation_input_token_cost": "0.00000375",
+        },
+    )
+
+    result = await api.usage_async(
+        "test-model",
+        {
+            "input_tokens": 1_000,
+            "output_tokens": 500,
+            "cache_read_input_tokens": 90_000,
+            "cache_creation_input_tokens": 2_000,
+        },
+    )
+
+    assert result is not None
+    # 1000 text + 90000 read + 2000 creation are all billed.
+    assert str(result.total_cost) == "0.045000"
+    assert str(result.cache_read_cost) == "0.027000"
+    assert str(result.cache_creation_cost) == "0.007500"
+
+
+async def test_reasoning_tokens_read_from_completion_details(monkeypatch) -> None:
+    _stub_table(
+        monkeypatch,
+        {
+            "input_cost_per_token": "0.000005",
+            "output_cost_per_token": "0.00003",
+            "output_cost_per_reasoning_token": "0.00006",
+        },
+    )
+
+    result = await api.usage_async(
+        "test-model",
+        {
+            "prompt_tokens": 1_000,
+            "completion_tokens": 5_000,
+            "completion_tokens_details": {"reasoning_tokens": 4_000},
+        },
+    )
+
+    assert result is not None
+    assert str(result.total_cost) == "0.275000"
+    assert str(result.reasoning_cost) == "0.240000"
+
+
+async def test_cached_tokens_cannot_exceed_input_tokens(monkeypatch) -> None:
+    _stub_table(
+        monkeypatch,
+        {"input_cost_per_token": "0.000005", "output_cost_per_token": "0.00003"},
+    )
+
+    with pytest.raises(ValueError, match="must not exceed input_tokens"):
+        await api.cost_async("test-model", 100, 10, cached_tokens=101)
+
+    with pytest.raises(ValueError, match="must not exceed input_tokens"):
+        await api.cost_async("test-model", 100, 10, cached_tokens=60, cache_creation_tokens=60)
+
+
+async def test_reasoning_tokens_cannot_exceed_output_tokens(monkeypatch) -> None:
+    _stub_table(
+        monkeypatch,
+        {"input_cost_per_token": "0.000005", "output_cost_per_token": "0.00003"},
+    )
+
+    with pytest.raises(ValueError, match="must not exceed output_tokens"):
+        await api.cost_async("test-model", 100, 10, reasoning_tokens=11)
+
+
+async def test_cache_kwargs_reject_bool_and_negative(monkeypatch) -> None:
+    _stub_table(
+        monkeypatch,
+        {"input_cost_per_token": "0.000005", "output_cost_per_token": "0.00003"},
+    )
+
+    with pytest.raises(ValueError, match="must be an integer"):
+        await api.cost_async("test-model", 100, 10, cached_tokens=True)
+    with pytest.raises(ValueError, match="non-negative"):
+        await api.cost_async("test-model", 100, 10, cached_tokens=-1)

@@ -1,11 +1,15 @@
-"""Tiered and long-context pricing resolution.
+"""Tiered, long-context, cache and reasoning pricing resolution.
 
-Pure helpers: no I/O, no cache, no network. Upstream ships two mechanisms that
-behave differently, so both are modelled separately:
+Pure helpers: no I/O, no cache, no network. Upstream ships two tiering
+mechanisms that behave differently, so both are modelled separately:
 
 * `above_{N}_tokens` rates replace the base rates for the whole request once the
   input token count exceeds the threshold, and apply to output as well as input.
 * `tiered_pricing` ranges are graduated, billing each slice at its own rate.
+
+Five rate kinds are tracked. `cache_read`, `cache_creation` and `reasoning` fall
+back to the plain input/output rate when a model does not declare them, which
+makes passing those token counts harmless for models without cache pricing.
 
 Every parser here absorbs its own errors and degrades to an empty result.
 `pricing_client` wraps per-model parsing in a bare `except`, so raising would
@@ -16,35 +20,85 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 from typing import Any, Literal
 
-Side = Literal["input", "output"]
+RateKind = Literal["input", "output", "cache_read", "cache_creation", "reasoning"]
 
-# Anchored on _tokens$, which also excludes service-tier variants such as
-# input_cost_per_token_above_200k_tokens_priority.
+# Upstream field name for each rate kind.
+RATE_FIELDS: dict[RateKind, str] = {
+    "input": "input_cost_per_token",
+    "output": "output_cost_per_token",
+    "cache_read": "cache_read_input_token_cost",
+    "cache_creation": "cache_creation_input_token_cost",
+    "reasoning": "output_cost_per_reasoning_token",
+}
+
+# DeepSeek and friends spell the cache-read rate differently.
+_CACHE_READ_ALIASES = ("input_cost_per_token_cache_hit",)
+
+# When a model omits a rate, bill those tokens at this rate instead.
+_RATE_FALLBACK: dict[RateKind, RateKind] = {
+    "cache_read": "input",
+    "cache_creation": "input",
+    "reasoning": "output",
+}
+
+# Only these four have above_{N}_tokens variants upstream; reasoning has none.
+_THRESHOLD_BASES: dict[str, RateKind] = {
+    "input_cost_per_token": "input",
+    "output_cost_per_token": "output",
+    "cache_read_input_token_cost": "cache_read",
+    "cache_creation_input_token_cost": "cache_creation",
+}
+
+# Anchored on _tokens$ and matched against the whole key, which excludes both
+# service-tier variants (..._above_200k_tokens_priority) and the 1-hour cache
+# TTL variants (..._above_1hr, ..._above_1hr_above_200k_tokens).
 _THRESHOLD_KEY = re.compile(
-    r"^(?P<side>input|output)_cost_per_token_above_(?P<amount>\d+)(?P<kilo>k?)_tokens$"
+    r"^(?P<base>"
+    + "|".join(sorted(_THRESHOLD_BASES, key=len, reverse=True))
+    + r")_above_(?P<amount>\d+)(?P<kilo>k?)_tokens$"
 )
 
 _ZERO = Decimal("0")
 
 
 @dataclass(frozen=True)
+class TokenRates:
+    """Per-token rates for one pricing context. `None` means not declared."""
+
+    input: Decimal | None = None
+    output: Decimal | None = None
+    cache_read: Decimal | None = None
+    cache_creation: Decimal | None = None
+    reasoning: Decimal | None = None
+
+    def get(self, kind: RateKind) -> Decimal | None:
+        """Return the rate for `kind`, falling back per `_RATE_FALLBACK`."""
+        direct: Decimal | None = getattr(self, kind)
+        if direct is not None:
+            return direct
+        fallback = _RATE_FALLBACK.get(kind)
+        return None if fallback is None else getattr(self, fallback)
+
+    def is_empty(self) -> bool:
+        return self.input is None and self.output is None
+
+
+@dataclass(frozen=True)
 class PricingThreshold:
     threshold: int
     key: str
-    input_rate: Decimal | None
-    output_rate: Decimal | None
+    rates: TokenRates
 
 
 @dataclass(frozen=True)
 class PricingTier:
     range_start: Decimal
     range_end: Decimal
-    input_rate: Decimal | None
-    output_rate: Decimal | None
+    rates: TokenRates
 
 
 def _to_decimal(value: Any) -> Decimal | None:
@@ -63,6 +117,22 @@ def _to_decimal(value: Any) -> Decimal | None:
     return None
 
 
+def parse_base_rates(raw: Mapping[str, Any]) -> TokenRates:
+    """Read the flat per-token rates a model declares."""
+    values: dict[str, Decimal | None] = {
+        kind: _to_decimal(raw.get(field)) for kind, field in RATE_FIELDS.items()
+    }
+
+    if values["cache_read"] is None:
+        for alias in _CACHE_READ_ALIASES:
+            aliased = _to_decimal(raw.get(alias))
+            if aliased is not None:
+                values["cache_read"] = aliased
+                break
+
+    return TokenRates(**values)
+
+
 def parse_thresholds(raw: Mapping[str, Any]) -> tuple[PricingThreshold, ...]:
     """Collect above-N-tokens rates, highest threshold first."""
     by_threshold: dict[int, dict[str, Any]] = {}
@@ -78,16 +148,15 @@ def parse_thresholds(raw: Mapping[str, Any]) -> tuple[PricingThreshold, ...]:
         threshold = amount * 1000 if match.group("kilo") else amount
         entry = by_threshold.setdefault(
             threshold,
-            {"key": f"above_{match.group('amount')}{match.group('kilo')}_tokens"},
+            {"key": f"above_{match.group('amount')}{match.group('kilo')}_tokens", "rates": {}},
         )
-        entry[match.group("side")] = rate
+        entry["rates"][_THRESHOLD_BASES[match.group("base")]] = rate
 
     return tuple(
         PricingThreshold(
             threshold=threshold,
             key=entry["key"],
-            input_rate=entry.get("input"),
-            output_rate=entry.get("output"),
+            rates=TokenRates(**entry["rates"]),
         )
         for threshold, entry in sorted(by_threshold.items(), reverse=True)
     )
@@ -114,52 +183,43 @@ def parse_tiers(raw: Any) -> tuple[PricingTier, ...]:
         end = _to_decimal(bounds[1])
         if start is None or end is None or end <= start:
             continue
-        input_rate = _to_decimal(entry.get("input_cost_per_token"))
-        output_rate = _to_decimal(entry.get("output_cost_per_token"))
-        if input_rate is None and output_rate is None:
+        rates = parse_base_rates(entry)
+        if rates.is_empty():
             continue
-        tiers.append(
-            PricingTier(
-                range_start=start,
-                range_end=end,
-                input_rate=input_rate,
-                output_rate=output_rate,
-            )
-        )
+        tiers.append(PricingTier(range_start=start, range_end=end, rates=rates))
 
     return tuple(sorted(tiers, key=lambda tier: tier.range_start))
 
 
 def resolve_rates(
-    base_input: Decimal | None,
-    base_output: Decimal | None,
+    base: TokenRates,
     thresholds: Sequence[PricingThreshold],
     input_tokens: int,
-) -> tuple[Decimal | None, Decimal | None, str | None]:
-    """Apply the highest matching threshold.
+) -> tuple[TokenRates, str | None]:
+    """Apply the highest matching threshold on top of the base rates.
 
     The trigger is the input token count alone, and it is strictly greater, so a
     request of exactly the threshold size stays on base rates. A threshold that
-    declares only an input rate leaves output on its base rate.
+    declares only some rates leaves the rest on their base values.
     """
     for threshold in thresholds:
         if input_tokens > threshold.threshold:
-            return (
-                threshold.input_rate if threshold.input_rate is not None else base_input,
-                threshold.output_rate if threshold.output_rate is not None else base_output,
-                threshold.key,
-            )
-    return base_input, base_output, None
+            overrides: dict[str, Decimal] = {}
+            for kind in RATE_FIELDS:
+                value = getattr(threshold.rates, kind)
+                if value is not None:
+                    overrides[str(kind)] = value
+            return replace(base, **overrides), threshold.key
+    return base, None
 
 
-def _tier_rate(tier: PricingTier, side: Side) -> Decimal:
-    rate = tier.input_rate if side == "input" else tier.output_rate
-    return rate if rate is not None else _ZERO
-
-
-def graduated_cost(tokens: int, tiers: Sequence[PricingTier], side: Side) -> Decimal:
+def graduated_cost(tokens: int, tiers: Sequence[PricingTier], kind: RateKind) -> Decimal:
     """Sum per-slice cost at full precision. Tokens past the top range bill at
-    the last tier's rate."""
+    the last tier's rate.
+
+    Each token kind is measured from zero independently, matching how litellm's
+    provider calculators call this.
+    """
     if tokens <= 0 or not tiers:
         return _ZERO
 
@@ -175,10 +235,10 @@ def graduated_cost(tokens: int, tiers: Sequence[PricingTier], side: Side) -> Dec
         start = max(tier.range_start, processed)
         end = min(tier.range_end, remaining)
         if end > start:
-            total += (end - start) * _tier_rate(tier, side)
+            total += (end - start) * (tier.rates.get(kind) or _ZERO)
             processed = end
 
     if processed < remaining:
-        total += (remaining - processed) * _tier_rate(tiers[-1], side)
+        total += (remaining - processed) * (tiers[-1].rates.get(kind) or _ZERO)
 
     return total

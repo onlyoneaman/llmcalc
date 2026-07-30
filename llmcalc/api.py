@@ -85,30 +85,68 @@ async def cost_async(
     input_tokens: int,
     output_tokens: int,
     cache_timeout: int | None = None,
+    *,
+    cached_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+    reasoning_tokens: int = 0,
 ) -> CostBreakdown | None:
-    """Calculate model usage cost from token counts, or return `None` if model is unavailable."""
+    """Calculate model usage cost from token counts, or return `None` if model is unavailable.
+
+    `input_tokens` is the **total** prompt count, inclusive of `cached_tokens`
+    and `cache_creation_tokens`; `output_tokens` is inclusive of
+    `reasoning_tokens`. Those subsets are re-priced at their own rates, falling
+    back to the plain input/output rate for models that do not declare them.
+    """
     _validate_token_count(input_tokens, "input_tokens")
     _validate_token_count(output_tokens, "output_tokens")
+    _validate_token_count(cached_tokens, "cached_tokens")
+    _validate_token_count(cache_creation_tokens, "cache_creation_tokens")
+    _validate_token_count(reasoning_tokens, "reasoning_tokens")
+
+    if cached_tokens + cache_creation_tokens > input_tokens:
+        raise ValueError(
+            "cached_tokens + cache_creation_tokens must not exceed input_tokens; "
+            "input_tokens is the total prompt count, inclusive of both"
+        )
+    if reasoning_tokens > output_tokens:
+        raise ValueError(
+            "reasoning_tokens must not exceed output_tokens; "
+            "output_tokens is the total completion count, inclusive of reasoning"
+        )
 
     model_costs = await model_async(model, cache_timeout=cache_timeout)
     if model_costs is None:
         return None
 
+    text_input = input_tokens - cached_tokens - cache_creation_tokens
+    text_output = output_tokens - reasoning_tokens
+
     if model_costs.tiered_pricing:
-        raw_input = graduated_cost(input_tokens, model_costs.tiered_pricing, "input")
-        raw_output = graduated_cost(output_tokens, model_costs.tiered_pricing, "output")
+        tiers = model_costs.tiered_pricing
+        raw_text_input = graduated_cost(text_input, tiers, "input")
+        raw_cache_read = graduated_cost(cached_tokens, tiers, "cache_read")
+        raw_cache_creation = graduated_cost(cache_creation_tokens, tiers, "cache_creation")
+        raw_text_output = graduated_cost(text_output, tiers, "output")
+        raw_reasoning = graduated_cost(reasoning_tokens, tiers, "reasoning")
         tier_applied: str | None = "tiered_pricing"
     else:
-        input_rate, output_rate, tier_applied = resolve_rates(
-            model_costs.input_cost_per_token,
-            model_costs.output_cost_per_token,
-            model_costs.thresholds,
-            input_tokens,
+        rates, tier_applied = resolve_rates(
+            model_costs.base_rates(), model_costs.thresholds, input_tokens
         )
+        input_rate = rates.get("input")
+        output_rate = rates.get("output")
         if input_rate is None or output_rate is None:
             return None
-        raw_input = Decimal(input_tokens) * input_rate
-        raw_output = Decimal(output_tokens) * output_rate
+        raw_text_input = Decimal(text_input) * input_rate
+        raw_cache_read = Decimal(cached_tokens) * (rates.get("cache_read") or input_rate)
+        raw_cache_creation = Decimal(cache_creation_tokens) * (
+            rates.get("cache_creation") or input_rate
+        )
+        raw_text_output = Decimal(text_output) * output_rate
+        raw_reasoning = Decimal(reasoning_tokens) * (rates.get("reasoning") or output_rate)
+
+    raw_input = raw_text_input + raw_cache_read + raw_cache_creation
+    raw_output = raw_text_output + raw_reasoning
 
     # Round each emitted field once, and derive the total from the unrounded
     # legs so the parts cannot disagree with the whole.
@@ -118,6 +156,9 @@ async def cost_async(
         total_cost=_round_money(raw_input + raw_output),
         currency=model_costs.currency,
         tier_applied=tier_applied,
+        cache_read_cost=_round_money(raw_cache_read),
+        cache_creation_cost=_round_money(raw_cache_creation),
+        reasoning_cost=_round_money(raw_reasoning),
     )
 
 
@@ -126,14 +167,25 @@ def cost(
     input_tokens: int,
     output_tokens: int,
     cache_timeout: int | None = None,
+    *,
+    cached_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+    reasoning_tokens: int = 0,
 ) -> CostBreakdown | None:
-    """Calculate model usage cost from token counts, or return `None` if model is unavailable."""
+    """Calculate model usage cost from token counts, or return `None` if model is unavailable.
+
+    `input_tokens` is the total prompt count, inclusive of `cached_tokens` and
+    `cache_creation_tokens`; `output_tokens` is inclusive of `reasoning_tokens`.
+    """
     return _run_sync(
         cost_async(
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cache_timeout=cache_timeout,
+            cached_tokens=cached_tokens,
+            cache_creation_tokens=cache_creation_tokens,
+            reasoning_tokens=reasoning_tokens,
         )
     )
 
@@ -170,18 +222,64 @@ def _attr_token(usage: Any, names: tuple[str, ...], field_name: str) -> int | No
     return None
 
 
-def _get_usage_tokens(usage: Any) -> tuple[int, int]:
+def _nested(usage: Any, container_keys: tuple[str, ...], names: tuple[str, ...]) -> int:
+    """Read a token count out of a nested details object, dict or attribute."""
+    for container_key in container_keys:
+        container = (
+            usage.get(container_key)
+            if isinstance(usage, dict)
+            else getattr(usage, container_key, None)
+        )
+        if container is None:
+            continue
+        value = (
+            _value_from_mapping(container, names, container_key)
+            if isinstance(container, dict)
+            else _attr_token(container, names, container_key)
+        )
+        if value is not None:
+            return value
+    return 0
+
+
+def _flat(usage: Any, names: tuple[str, ...], field_name: str) -> int | None:
+    if isinstance(usage, dict):
+        return _value_from_mapping(usage, names, field_name)
+    return _attr_token(usage, names, field_name)
+
+
+_PROMPT_DETAIL_KEYS = ("prompt_tokens_details", "promptTokensDetails", "input_tokens_details")
+_COMPLETION_DETAIL_KEYS = (
+    "completion_tokens_details",
+    "completionTokensDetails",
+    "output_tokens_details",
+)
+_CACHE_READ_KEYS = ("cache_read_input_tokens", "cacheReadInputTokens")
+_CACHE_CREATION_KEYS = ("cache_creation_input_tokens", "cacheCreationInputTokens")
+_CACHED_SUBSET_KEYS = ("cached_tokens", "cachedTokens")
+_REASONING_KEYS = ("reasoning_tokens", "reasoningTokens")
+
+
+def _get_usage_tokens(usage: Any) -> tuple[int, int, int, int, int]:
+    """Normalize a provider usage object to inclusive token counts.
+
+    Returns `(input_tokens, output_tokens, cached, cache_creation, reasoning)`
+    where `input_tokens` is the total prompt count including both cache subsets
+    and `output_tokens` includes reasoning.
+
+    The two provider conventions are distinguished by key name, not by guessing:
+    Anthropic reports `cache_read_input_tokens` *in addition to* `input_tokens`,
+    while OpenAI reports `prompt_tokens_details.cached_tokens` as a subset of
+    `prompt_tokens` already counted.
+    """
     if isinstance(usage, (str, list, tuple)):
         raise ValueError(TEXT_INPUT_MESSAGE)
 
-    if isinstance(usage, dict):
-        if "messages" in usage:
-            raise ValueError(TEXT_INPUT_MESSAGE)
-        input_tokens = _value_from_mapping(usage, _INPUT_KEYS, "input_tokens")
-        output_tokens = _value_from_mapping(usage, _OUTPUT_KEYS, "output_tokens")
-    else:
-        input_tokens = _attr_token(usage, _INPUT_KEYS, "input_tokens")
-        output_tokens = _attr_token(usage, _OUTPUT_KEYS, "output_tokens")
+    if isinstance(usage, dict) and "messages" in usage:
+        raise ValueError(TEXT_INPUT_MESSAGE)
+
+    input_tokens = _flat(usage, _INPUT_KEYS, "input_tokens")
+    output_tokens = _flat(usage, _OUTPUT_KEYS, "output_tokens")
 
     if input_tokens is None or output_tokens is None:
         raise ValueError("usage must provide input/prompt tokens and output/completion tokens")
@@ -189,7 +287,24 @@ def _get_usage_tokens(usage: Any) -> tuple[int, int]:
     _validate_token_count(input_tokens, "input_tokens")
     _validate_token_count(output_tokens, "output_tokens")
 
-    return input_tokens, output_tokens
+    additive_read = _flat(usage, _CACHE_READ_KEYS, "cache_read_input_tokens")
+    additive_creation = _flat(usage, _CACHE_CREATION_KEYS, "cache_creation_input_tokens")
+
+    if additive_read is not None or additive_creation is not None:
+        # Anthropic shape: cache counts sit outside input_tokens.
+        cached = additive_read or 0
+        creation = additive_creation or 0
+        _validate_token_count(cached, "cache_read_input_tokens")
+        _validate_token_count(creation, "cache_creation_input_tokens")
+        input_tokens += cached + creation
+    else:
+        # OpenAI shape: cached_tokens is already inside prompt_tokens.
+        cached = _nested(usage, _PROMPT_DETAIL_KEYS, _CACHED_SUBSET_KEYS)
+        creation = 0
+
+    reasoning = _nested(usage, _COMPLETION_DETAIL_KEYS, _REASONING_KEYS)
+
+    return input_tokens, output_tokens, cached, creation, reasoning
 
 
 async def usage_async(
@@ -197,13 +312,20 @@ async def usage_async(
     usage: UsageLike | dict[str, Any],
     cache_timeout: int | None = None,
 ) -> CostBreakdown | None:
-    """Calculate cost from an object that includes usage token fields."""
-    input_tokens, output_tokens = _get_usage_tokens(usage)
+    """Calculate cost from an object that includes usage token fields.
+
+    Cache and reasoning token counts are picked up automatically from either the
+    Anthropic or OpenAI usage shape when present.
+    """
+    input_tokens, output_tokens, cached, creation, reasoning = _get_usage_tokens(usage)
     return await cost_async(
         model=model,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cache_timeout=cache_timeout,
+        cached_tokens=cached,
+        cache_creation_tokens=creation,
+        reasoning_tokens=reasoning,
     )
 
 

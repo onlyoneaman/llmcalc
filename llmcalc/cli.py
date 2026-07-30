@@ -78,8 +78,21 @@ def app_main(
 @app.command()
 def quote(
     model: str = _model_option(),
-    input_tokens: int = typer.Option(..., "--input", help="Input token count", min=0),
-    output_tokens: int = typer.Option(..., "--output", help="Output token count", min=0),
+    input_tokens: int = typer.Option(
+        ..., "--input", help="Total input token count, including any cached tokens", min=0
+    ),
+    output_tokens: int = typer.Option(
+        ..., "--output", help="Total output token count, including any reasoning tokens", min=0
+    ),
+    cached_tokens: int = typer.Option(
+        0, "--cached", help="Input tokens served from cache (subset of --input)", min=0
+    ),
+    cache_creation_tokens: int = typer.Option(
+        0, "--cache-creation", help="Input tokens written to cache (subset of --input)", min=0
+    ),
+    reasoning_tokens: int = typer.Option(
+        0, "--reasoning", help="Output tokens spent reasoning (subset of --output)", min=0
+    ),
     cache_timeout: int | None = _cache_timeout_option(),
     as_json: bool = _json_option(),
 ) -> None:
@@ -89,6 +102,9 @@ def quote(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cache_timeout=cache_timeout,
+        cached_tokens=cached_tokens,
+        cache_creation_tokens=cache_creation_tokens,
+        reasoning_tokens=reasoning_tokens,
     )
 
     if result is None:
@@ -102,6 +118,9 @@ def quote(
         "total_cost": result.total_cost,
         "currency": result.currency,
         "tier_applied": result.tier_applied,
+        "cache_read_cost": result.cache_read_cost,
+        "cache_creation_cost": result.cache_creation_cost,
+        "reasoning_cost": result.reasoning_cost,
     }
     _emit(payload, as_json)
 

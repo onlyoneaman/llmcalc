@@ -49,6 +49,19 @@ function parseArgs(args: string[]): { flags: Set<string>; values: Map<string, st
   return { flags, values };
 }
 
+function parseOptionalIntOption(raw: string | undefined, name: string): number {
+  if (raw === undefined) {
+    return 0;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+
+  return parsed;
+}
+
 function parseIntOption(raw: string | undefined, name: string): number {
   if (raw === undefined) {
     throw new Error(`Missing required option ${name}`);
@@ -134,14 +147,20 @@ export async function main(argv: string[], printer: Printer = {
 
     const inputTokens = parseIntOption(values.get("--input"), "--input");
     const outputTokens = parseIntOption(values.get("--output"), "--output");
+    const cachedTokens = parseOptionalIntOption(values.get("--cached"), "--cached");
+    const cacheCreationTokens = parseOptionalIntOption(
+      values.get("--cache-creation"),
+      "--cache-creation"
+    );
+    const reasoningTokens = parseOptionalIntOption(values.get("--reasoning"), "--reasoning");
     const cacheTimeout = parseCacheTimeout(values.get("--cache-timeout"));
 
-    const result = await cost(
-      modelName,
-      inputTokens,
-      outputTokens,
-      cacheTimeout !== undefined ? { cacheTimeout } : {}
-    );
+    const result = await cost(modelName, inputTokens, outputTokens, {
+      ...(cacheTimeout !== undefined ? { cacheTimeout } : {}),
+      cachedTokens,
+      cacheCreationTokens,
+      reasoningTokens
+    });
     if (result === null) {
       printer.err(`Model not found: ${modelName}`);
       return 1;
@@ -154,7 +173,10 @@ export async function main(argv: string[], printer: Printer = {
         output_cost: result.outputCost.toFixed(6),
         total_cost: result.totalCost.toFixed(6),
         currency: result.currency,
-        tier_applied: result.tierApplied
+        tier_applied: result.tierApplied,
+        cache_read_cost: result.cacheReadCost.toFixed(6),
+        cache_creation_cost: result.cacheCreationCost.toFixed(6),
+        reasoning_cost: result.reasoningCost.toFixed(6)
       },
       flags.has("--json"),
       printer.out

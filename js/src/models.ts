@@ -3,16 +3,28 @@ import { Decimal } from "decimal.js";
 import {
   type PricingThreshold,
   type PricingTier,
+  type TokenRates,
+  parseBaseRates,
   parseThresholds,
   parseTiers
 } from "./pricing-tiers.js";
 
+/**
+ * Cost result for a token usage calculation.
+ *
+ * `inputCost` covers every prompt token, including any cache-read and
+ * cache-creation portion; `outputCost` likewise includes reasoning tokens.
+ * `totalCost` is their sum, so it always accounts for all token kinds passed.
+ */
 export interface CostBreakdown {
   inputCost: Decimal;
   outputCost: Decimal;
   totalCost: Decimal;
   currency: string;
   tierApplied: string | null;
+  cacheReadCost: Decimal;
+  cacheCreationCost: Decimal;
+  reasoningCost: Decimal;
 }
 
 /**
@@ -25,6 +37,9 @@ export interface ModelPricing {
   model: string;
   inputCostPerToken: Decimal | null;
   outputCostPerToken: Decimal | null;
+  cacheReadCostPerToken: Decimal | null;
+  cacheCreationCostPerToken: Decimal | null;
+  reasoningCostPerToken: Decimal | null;
   thresholds: PricingThreshold[];
   tieredPricing: PricingTier[];
   provider: string | null;
@@ -109,6 +124,7 @@ export function toModelPricing(
 
   const tieredPricing = parseTiers(raw.tiered_pricing);
   const thresholds = parseThresholds(raw as Record<string, unknown>);
+  const aux = parseBaseRates(raw as Record<string, unknown>);
 
   const hasBaseRates = inputCost !== null && outputCost !== null;
   if (!hasBaseRates && tieredPricing.length === 0) {
@@ -123,10 +139,24 @@ export function toModelPricing(
     model,
     inputCostPerToken: inputCost,
     outputCostPerToken: outputCost,
+    cacheReadCostPerToken: aux.cache_read,
+    cacheCreationCostPerToken: aux.cache_creation,
+    reasoningCostPerToken: aux.reasoning,
     thresholds,
     tieredPricing,
     provider: typeof raw.provider === "string" ? raw.provider : null,
     currency,
     lastUpdated: typeof raw.last_updated === "string" ? raw.last_updated : null
+  };
+}
+
+/** Bundle the declared rates for `pricing-tiers` to resolve against. */
+export function baseRates(pricing: ModelPricing): TokenRates {
+  return {
+    input: pricing.inputCostPerToken,
+    output: pricing.outputCostPerToken,
+    cache_read: pricing.cacheReadCostPerToken,
+    cache_creation: pricing.cacheCreationCostPerToken,
+    reasoning: pricing.reasoningCostPerToken
   };
 }
