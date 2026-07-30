@@ -3,6 +3,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Decimal } from "decimal.js";
+
 import { cost, model, clearCache } from "./api.js";
 import { getPackageVersion } from "./config.js";
 
@@ -73,15 +75,32 @@ function parseCacheTimeout(raw: string | undefined): number | undefined {
   return parsed;
 }
 
-function emit(data: Record<string, string>, asJson: boolean, out: (message: string) => void): void {
+type EmitValue = string | number | string[] | null;
+
+function emit(
+  data: Record<string, EmitValue>,
+  asJson: boolean,
+  out: (message: string) => void
+): void {
   if (asJson) {
     out(JSON.stringify(data));
     return;
   }
 
   for (const [key, value] of Object.entries(data)) {
-    out(`${key}: ${value}`);
+    out(`${key}: ${value === null ? "None" : value}`);
   }
+}
+
+/**
+ * Render a per-token rate in plain decimal notation.
+ *
+ * `toString()` yields `"7.5e-8"` for small values, where Python's
+ * `str(Decimal)` yields `"7.5E-8"`. Both CLIs emit plain notation so their
+ * JSON output matches.
+ */
+function rate(value: Decimal | null): string | null {
+  return value === null ? null : value.toFixed();
 }
 
 export async function main(argv: string[], printer: Printer = {
@@ -134,7 +153,8 @@ export async function main(argv: string[], printer: Printer = {
         input_cost: result.inputCost.toFixed(6),
         output_cost: result.outputCost.toFixed(6),
         total_cost: result.totalCost.toFixed(6),
-        currency: result.currency
+        currency: result.currency,
+        tier_applied: result.tierApplied
       },
       flags.has("--json"),
       printer.out
@@ -159,11 +179,13 @@ export async function main(argv: string[], printer: Printer = {
     emit(
       {
         model: result.model,
-        input_cost_per_token: result.inputCostPerToken.toString(),
-        output_cost_per_token: result.outputCostPerToken.toString(),
+        input_cost_per_token: rate(result.inputCostPerToken),
+        output_cost_per_token: rate(result.outputCostPerToken),
+        thresholds: result.thresholds.map((threshold) => threshold.key),
+        tier_count: result.tieredPricing.length,
         currency: result.currency,
-        provider: result.provider ?? "",
-        last_updated: result.lastUpdated ?? ""
+        provider: result.provider,
+        last_updated: result.lastUpdated
       },
       flags.has("--json"),
       printer.out

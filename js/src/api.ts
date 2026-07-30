@@ -5,6 +5,7 @@ import { DEFAULT_CACHE_TIMEOUT_SECONDS, resolveCacheTimeout } from "./config.js"
 import { resolveModelKey } from "./normalize.js";
 import { type FetchLike, getPricingTable } from "./pricing-client.js";
 import { type CostBreakdown, type ModelPricing } from "./models.js";
+import { graduatedCost, resolveRates } from "./pricing-tiers.js";
 
 export const DEFAULT_ROUNDING_PLACES = 6;
 
@@ -120,15 +121,37 @@ export async function cost(
     return null;
   }
 
-  const inputCost = roundMoney(new Decimal(inputTokens).mul(modelCosts.inputCostPerToken));
-  const outputCost = roundMoney(new Decimal(outputTokens).mul(modelCosts.outputCostPerToken));
-  const totalCost = roundMoney(inputCost.add(outputCost));
+  let rawInput: Decimal;
+  let rawOutput: Decimal;
+  let tierApplied: string | null;
 
+  if (modelCosts.tieredPricing.length > 0) {
+    rawInput = graduatedCost(inputTokens, modelCosts.tieredPricing, "input");
+    rawOutput = graduatedCost(outputTokens, modelCosts.tieredPricing, "output");
+    tierApplied = "tiered_pricing";
+  } else {
+    const [inputRate, outputRate, tier] = resolveRates(
+      modelCosts.inputCostPerToken,
+      modelCosts.outputCostPerToken,
+      modelCosts.thresholds,
+      inputTokens
+    );
+    if (inputRate === null || outputRate === null) {
+      return null;
+    }
+    rawInput = new Decimal(inputTokens).mul(inputRate);
+    rawOutput = new Decimal(outputTokens).mul(outputRate);
+    tierApplied = tier;
+  }
+
+  // Round each emitted field once, and derive the total from the unrounded
+  // legs so the parts cannot disagree with the whole.
   return {
-    inputCost,
-    outputCost,
-    totalCost,
-    currency: modelCosts.currency
+    inputCost: roundMoney(rawInput),
+    outputCost: roundMoney(rawOutput),
+    totalCost: roundMoney(rawInput.add(rawOutput)),
+    currency: modelCosts.currency,
+    tierApplied
   };
 }
 

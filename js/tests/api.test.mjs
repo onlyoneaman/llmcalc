@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { clearCache, cost, model, usage } from "../dist/api.js";
 
@@ -128,4 +131,47 @@ test("float token counts are rejected", async () => {
     () => usage("gpt-5.1", { prompt_tokens: 1.5, completion_tokens: 2 }, { fetchImpl: fakeFetch() }),
     /must be an integer/
   );
+});
+
+const fixtureDir = dirname(fileURLToPath(import.meta.url));
+const tierFixture = JSON.parse(
+  readFileSync(join(fixtureDir, "..", "..", "tests", "fixtures", "tiered_cases.json"), "utf8")
+);
+
+function stubFetch(pricing) {
+  return async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ "test-model": pricing })
+  });
+}
+
+for (const testCase of [...tierFixture.thresholds, ...tierFixture.graduated]) {
+  test(`cost matches fixture: ${testCase.name}`, async () => {
+    await withCachePath(async () => {
+      const result = await cost("test-model", testCase.input_tokens, testCase.output_tokens, {
+        fetchImpl: stubFetch(testCase.pricing)
+      });
+
+      assert.ok(result !== null);
+      assert.equal(result.inputCost.toFixed(6), testCase.expected.input_cost);
+      assert.equal(result.outputCost.toFixed(6), testCase.expected.output_cost);
+      assert.equal(result.totalCost.toFixed(6), testCase.expected.total_cost);
+      assert.equal(result.tierApplied, testCase.expected.tier_applied);
+    });
+  });
+}
+
+test("total is computed from unrounded legs", async () => {
+  await withCachePath(async () => {
+    const result = await cost("test-model", 1, 1, {
+      fetchImpl: stubFetch({
+        input_cost_per_token: "0.0000005",
+        output_cost_per_token: "0.0000005"
+      })
+    });
+
+    assert.ok(result !== null);
+    assert.equal(result.totalCost.toFixed(6), "0.000001");
+  });
 });

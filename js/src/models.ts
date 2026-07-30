@@ -1,16 +1,32 @@
 import { Decimal } from "decimal.js";
 
+import {
+  type PricingThreshold,
+  type PricingTier,
+  parseThresholds,
+  parseTiers
+} from "./pricing-tiers.js";
+
 export interface CostBreakdown {
   inputCost: Decimal;
   outputCost: Decimal;
   totalCost: Decimal;
   currency: string;
+  tierApplied: string | null;
 }
 
+/**
+ * Normalized token pricing for one model.
+ *
+ * Base rates are nullable: models priced purely through `tiered_pricing`
+ * publish no flat per-token rate at all.
+ */
 export interface ModelPricing {
   model: string;
-  inputCostPerToken: Decimal;
-  outputCostPerToken: Decimal;
+  inputCostPerToken: Decimal | null;
+  outputCostPerToken: Decimal | null;
+  thresholds: PricingThreshold[];
+  tieredPricing: PricingTier[];
   provider: string | null;
   currency: string;
   lastUpdated: string | null;
@@ -23,9 +39,13 @@ export interface RawModelPricingInput {
   completion_cost_per_token?: unknown;
   input_cost_per_million_tokens?: unknown;
   output_cost_per_million_tokens?: unknown;
+  tiered_pricing?: unknown;
   provider?: unknown;
   currency?: unknown;
   last_updated?: unknown;
+  // Index signature keeps the above_{N}_tokens threshold keys reachable so
+  // parseThresholds can see them.
+  [key: string]: unknown;
 }
 
 function parseDecimal(value: unknown): Decimal | null {
@@ -87,7 +107,11 @@ export function toModelPricing(
     }
   }
 
-  if (inputCost === null || outputCost === null) {
+  const tieredPricing = parseTiers(raw.tiered_pricing);
+  const thresholds = parseThresholds(raw as Record<string, unknown>);
+
+  const hasBaseRates = inputCost !== null && outputCost !== null;
+  if (!hasBaseRates && tieredPricing.length === 0) {
     throw new Error("Missing input/output token pricing fields");
   }
 
@@ -99,6 +123,8 @@ export function toModelPricing(
     model,
     inputCostPerToken: inputCost,
     outputCostPerToken: outputCost,
+    thresholds,
+    tieredPricing,
     provider: typeof raw.provider === "string" ? raw.provider : null,
     currency,
     lastUpdated: typeof raw.last_updated === "string" ? raw.last_updated : null
