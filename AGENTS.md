@@ -14,7 +14,7 @@
 - Parity includes:
   - Public API surface and semantics (cost/model/usage helpers, cache clear behavior).
   - CLI commands and flags (`quote`, `model`, `cache clear`, `--version`, `-v`).
-  - Default config and env vars (`LLMCALC_CACHE_TIMEOUT`, `LLMCALC_PRICING_URL`, `LLMCALC_CURRENCY`).
+  - Default config and env vars (`LLMCALC_CACHE_TIMEOUT`, `LLMCALC_PRICING_URL`, `LLMCALC_CURRENCY`, `LLMCALC_CACHE_PATH`).
   - Pricing normalization/alias behavior and deterministic rounding expectations.
   - Error behavior for invalid input and missing models.
 

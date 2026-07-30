@@ -42,3 +42,24 @@ def test_clear_cache(tmp_path, monkeypatch) -> None:
 
     cache.clear_cache()
     assert not file_path.exists()
+
+
+def test_cache_path_env_override(monkeypatch, tmp_path: Path) -> None:
+    target = tmp_path / "custom_cache.json"
+    monkeypatch.setenv("LLMCALC_CACHE_PATH", str(target))
+
+    assert cache.cache_file_path() == target
+
+
+def test_cache_path_falls_back_to_platform_dir(monkeypatch) -> None:
+    monkeypatch.delenv("LLMCALC_CACHE_PATH", raising=False)
+
+    assert cache.cache_file_path().name == "pricing_cache.json"
+
+
+def test_round_trip_through_env_override(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LLMCALC_CACHE_PATH", str(tmp_path / "nested" / "c.json"))
+
+    cache.save_cached_pricing({"gpt-4o": {"input_cost_per_token": "0.0000025"}})
+
+    assert cache.load_cached_pricing(3600) == {"gpt-4o": {"input_cost_per_token": "0.0000025"}}

@@ -34,4 +34,5 @@ llmcalc -v
 - `LLMCALC_CACHE_TIMEOUT`: cache TTL in seconds (default `43200`)
 - `LLMCALC_PRICING_URL`: override pricing source URL
 - `LLMCALC_CURRENCY`: fallback currency label if upstream omits currency
+- `LLMCALC_CACHE_PATH`: override the cache file location (default: platform cache dir)
 - `LLMCALC_CACHE_PATH`: optional absolute cache file path override
