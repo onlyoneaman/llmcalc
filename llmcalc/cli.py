@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Annotated, Any
 
 import typer
@@ -33,7 +34,7 @@ def _json_option() -> Any:
     return typer.Option(False, "--json", help="Emit JSON output")
 
 
-def _emit(data: dict[str, object], as_json: bool) -> None:
+def _emit(data: Mapping[str, object], as_json: bool) -> None:
     if as_json:
         typer.echo(json.dumps(data, default=str))
         return

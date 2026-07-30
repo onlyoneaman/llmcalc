@@ -12,6 +12,7 @@ from llmcalc.config import DEFAULT_CACHE_TIMEOUT_SECONDS, resolve_cache_timeout
 from llmcalc.models import CostBreakdown, ModelPricing
 from llmcalc.normalize import resolve_model_key
 from llmcalc.pricing_client import get_pricing_table
+from llmcalc.pricing_tiers import graduated_cost, resolve_rates
 
 DEFAULT_ROUNDING_PLACES = 6
 T = TypeVar("T")
@@ -93,15 +94,30 @@ async def cost_async(
     if model_costs is None:
         return None
 
-    input_cost = _round_money(Decimal(input_tokens) * model_costs.input_cost_per_token)
-    output_cost = _round_money(Decimal(output_tokens) * model_costs.output_cost_per_token)
-    total_cost = _round_money(input_cost + output_cost)
+    if model_costs.tiered_pricing:
+        raw_input = graduated_cost(input_tokens, model_costs.tiered_pricing, "input")
+        raw_output = graduated_cost(output_tokens, model_costs.tiered_pricing, "output")
+        tier_applied: str | None = "tiered_pricing"
+    else:
+        input_rate, output_rate, tier_applied = resolve_rates(
+            model_costs.input_cost_per_token,
+            model_costs.output_cost_per_token,
+            model_costs.thresholds,
+            input_tokens,
+        )
+        if input_rate is None or output_rate is None:
+            return None
+        raw_input = Decimal(input_tokens) * input_rate
+        raw_output = Decimal(output_tokens) * output_rate
 
+    # Round each emitted field once, and derive the total from the unrounded
+    # legs so the parts cannot disagree with the whole.
     return CostBreakdown(
-        input_cost=input_cost,
-        output_cost=output_cost,
-        total_cost=total_cost,
+        input_cost=_round_money(raw_input),
+        output_cost=_round_money(raw_output),
+        total_cost=_round_money(raw_input + raw_output),
         currency=model_costs.currency,
+        tier_applied=tier_applied,
     )
 
 

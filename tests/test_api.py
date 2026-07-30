@@ -1,11 +1,13 @@
+import json
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
 import llmcalc
 import llmcalc.api as api
-from llmcalc.models import ModelPricing
+from llmcalc.models import ModelPricing, RawModelPricing
 
 
 async def _fake_pricing_table(cache_timeout: int = 86400):
@@ -210,3 +212,75 @@ def test_bool_rejected_by_cost(monkeypatch) -> None:
     monkeypatch.setattr(api, "get_pricing_table", _fake_pricing_table)
     with pytest.raises(ValueError, match="must be an integer"):
         llmcalc.cost("gpt-5.1", input_tokens=True, output_tokens=5)
+
+
+FIXTURE = json.loads(
+    (Path(__file__).parent / "fixtures" / "tiered_cases.json").read_text(encoding="utf-8")
+)
+ALL_TIER_CASES = [*FIXTURE["thresholds"], *FIXTURE["graduated"]]
+
+
+def _stub_table(monkeypatch, pricing: dict) -> None:
+    model_pricing = RawModelPricing.model_validate(pricing).to_model_pricing("test-model")
+
+    async def _table(cache_timeout: int = 86400, **_kwargs):
+        _ = cache_timeout
+        return {"test-model": model_pricing}
+
+    monkeypatch.setattr(api, "get_pricing_table", _table)
+
+
+@pytest.mark.parametrize("case", ALL_TIER_CASES, ids=lambda c: c["name"])
+async def test_cost_matches_fixture(monkeypatch, case: dict) -> None:
+    _stub_table(monkeypatch, case["pricing"])
+
+    result = await api.cost_async("test-model", case["input_tokens"], case["output_tokens"])
+
+    assert result is not None
+    assert str(result.input_cost) == case["expected"]["input_cost"]
+    assert str(result.output_cost) == case["expected"]["output_cost"]
+    assert str(result.total_cost) == case["expected"]["total_cost"]
+    assert result.tier_applied == case["expected"]["tier_applied"]
+
+
+async def test_total_is_computed_from_unrounded_legs(monkeypatch) -> None:
+    # Each leg is 0.0000005, which alone rounds to 0.000001. Summed unrounded
+    # the total is 0.000001, not the 0.000002 a double-round would produce.
+    _stub_table(
+        monkeypatch,
+        {"input_cost_per_token": "0.0000005", "output_cost_per_token": "0.0000005"},
+    )
+
+    result = await api.cost_async("test-model", 1, 1)
+
+    assert result is not None
+    assert str(result.total_cost) == "0.000001"
+
+
+async def test_usage_applies_tiers_like_cost(monkeypatch) -> None:
+    _stub_table(
+        monkeypatch,
+        {
+            "input_cost_per_token": "0.000005",
+            "output_cost_per_token": "0.00003",
+            "input_cost_per_token_above_272k_tokens": "0.00001",
+            "output_cost_per_token_above_272k_tokens": "0.000045",
+        },
+    )
+
+    result = await api.usage_async(
+        "test-model", {"prompt_tokens": 300000, "completion_tokens": 5000}
+    )
+
+    assert result is not None
+    assert str(result.total_cost) == "3.225000"
+    assert result.tier_applied == "above_272k_tokens"
+
+
+async def test_unknown_model_returns_none(monkeypatch) -> None:
+    async def _table(cache_timeout: int = 86400, **_kwargs):
+        _ = cache_timeout
+        return {}
+
+    monkeypatch.setattr(api, "get_pricing_table", _table)
+    assert await api.cost_async("test-model", 10, 5) is None
