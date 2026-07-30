@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Annotated, Any
 
 import typer
@@ -32,6 +33,15 @@ def _cache_timeout_option() -> Any:
 
 def _json_option() -> Any:
     return typer.Option(False, "--json", help="Emit JSON output")
+
+
+def _rate(value: Decimal | None) -> str | None:
+    """Render a per-token rate in plain decimal notation.
+
+    `str(Decimal("0.000000075"))` is `"7.5E-8"`, which the JS CLI renders as
+    `"7.5e-8"`. Both emit plain notation so their JSON output matches.
+    """
+    return None if value is None else format(value, "f")
 
 
 def _emit(data: Mapping[str, object], as_json: bool) -> None:
@@ -91,6 +101,7 @@ def quote(
         "output_cost": result.output_cost,
         "total_cost": result.total_cost,
         "currency": result.currency,
+        "tier_applied": result.tier_applied,
     }
     _emit(payload, as_json)
 
@@ -110,8 +121,10 @@ def model_cmd(
 
     payload = {
         "model": result.model,
-        "input_cost_per_token": result.input_cost_per_token,
-        "output_cost_per_token": result.output_cost_per_token,
+        "input_cost_per_token": _rate(result.input_cost_per_token),
+        "output_cost_per_token": _rate(result.output_cost_per_token),
+        "thresholds": [threshold.key for threshold in result.thresholds],
+        "tier_count": len(result.tiered_pricing),
         "currency": result.currency,
         "provider": result.provider,
         "last_updated": result.last_updated,
