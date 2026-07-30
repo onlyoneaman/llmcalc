@@ -84,3 +84,48 @@ test("clearCache clears persisted data", async () => {
     assert.ok(result);
   });
 });
+
+test("bool token counts are rejected", async () => {
+  await withCachePath(async () => {
+    await assert.rejects(
+      () => usage("gpt-5.1", { prompt_tokens: true, completion_tokens: false }, { fetchImpl: fakeFetch() }),
+      /must be an integer/
+    );
+  });
+});
+
+test("camel case usage keys are accepted", async () => {
+  await withCachePath(async () => {
+    const result = await usage("gpt-5.1", { inputTokens: 10, outputTokens: 5 }, { fetchImpl: fakeFetch() });
+    assert.ok(result);
+    assert.equal(result.totalCost.toFixed(6), "0.000020");
+  });
+});
+
+test("string usage explains that text is unsupported", async () => {
+  await assert.rejects(
+    () => usage("gpt-5.1", "hello world", { fetchImpl: fakeFetch() }),
+    /token counts, not text/
+  );
+});
+
+test("messages array explains that text is unsupported", async () => {
+  await assert.rejects(
+    () => usage("gpt-5.1", [{ role: "user", content: "hi" }], { fetchImpl: fakeFetch() }),
+    /token counts, not text/
+  );
+});
+
+test("dict with messages explains that text is unsupported", async () => {
+  await assert.rejects(
+    () => usage("gpt-5.1", { messages: [{ role: "user", content: "hi" }] }, { fetchImpl: fakeFetch() }),
+    /token counts, not text/
+  );
+});
+
+test("float token counts are rejected", async () => {
+  await assert.rejects(
+    () => usage("gpt-5.1", { prompt_tokens: 1.5, completion_tokens: 2 }, { fetchImpl: fakeFetch() }),
+    /must be an integer/
+  );
+});

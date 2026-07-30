@@ -16,6 +16,15 @@ from llmcalc.pricing_client import get_pricing_table
 DEFAULT_ROUNDING_PLACES = 6
 T = TypeVar("T")
 
+TEXT_INPUT_MESSAGE = (
+    "llmcalc takes token counts, not text. Pass integer input/output token counts, "
+    "or the provider's usage object (for example response.usage). llmcalc does not "
+    "tokenize strings or message lists."
+)
+
+_INPUT_KEYS = ("input_tokens", "prompt_tokens", "inputTokens", "promptTokens")
+_OUTPUT_KEYS = ("output_tokens", "completion_tokens", "outputTokens", "completionTokens")
+
 
 @runtime_checkable
 class UsageLike(Protocol):
@@ -30,7 +39,9 @@ def _round_money(amount: Decimal, places: int = DEFAULT_ROUNDING_PLACES) -> Deci
     return amount.quantize(quant, rounding=ROUND_HALF_UP)
 
 
-def _validate_non_negative(value: int, field_name: str) -> None:
+def _validate_token_count(value: int, field_name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be an integer, got {type(value).__name__}")
     if value < 0:
         raise ValueError(f"{field_name} must be non-negative")
 
@@ -75,8 +86,8 @@ async def cost_async(
     cache_timeout: int | None = None,
 ) -> CostBreakdown | None:
     """Calculate model usage cost from token counts, or return `None` if model is unavailable."""
-    _validate_non_negative(input_tokens, "input_tokens")
-    _validate_non_negative(output_tokens, "output_tokens")
+    _validate_token_count(input_tokens, "input_tokens")
+    _validate_token_count(output_tokens, "output_tokens")
 
     model_costs = await model_async(model, cache_timeout=cache_timeout)
     if model_costs is None:
@@ -111,29 +122,56 @@ def cost(
     )
 
 
-def _value_from_mapping(usage: dict[str, Any], key_options: tuple[str, ...]) -> int | None:
+def _coerce_token_value(value: Any, field_name: str) -> int | None:
+    """Return an int token count, or None when the key was absent.
+
+    A key that is present but not an int is an error rather than a miss, so the
+    caller hears about the type instead of a misleading "not provided" message.
+    `bool` is excluded deliberately: it subclasses `int`, so `True` would
+    otherwise bill as one token.
+    """
+    if value is None:
+        return None
+    if type(value) is int:
+        return value
+    raise ValueError(f"{field_name} must be an integer, got {type(value).__name__}")
+
+
+def _value_from_mapping(
+    usage: dict[str, Any], key_options: tuple[str, ...], field_name: str
+) -> int | None:
     for key in key_options:
-        value = usage.get(key)
-        if isinstance(value, int):
-            return value
+        if key in usage:
+            return _coerce_token_value(usage[key], field_name)
+    return None
+
+
+def _attr_token(usage: Any, names: tuple[str, ...], field_name: str) -> int | None:
+    for name in names:
+        value = getattr(usage, name, None)
+        if value is not None:
+            return _coerce_token_value(value, field_name)
     return None
 
 
 def _get_usage_tokens(usage: Any) -> tuple[int, int]:
+    if isinstance(usage, (str, list, tuple)):
+        raise ValueError(TEXT_INPUT_MESSAGE)
+
     if isinstance(usage, dict):
-        input_tokens = _value_from_mapping(usage, ("input_tokens", "prompt_tokens"))
-        output_tokens = _value_from_mapping(usage, ("output_tokens", "completion_tokens"))
+        if "messages" in usage:
+            raise ValueError(TEXT_INPUT_MESSAGE)
+        input_tokens = _value_from_mapping(usage, _INPUT_KEYS, "input_tokens")
+        output_tokens = _value_from_mapping(usage, _OUTPUT_KEYS, "output_tokens")
     else:
-        input_tokens = getattr(usage, "input_tokens", None)
-        if not isinstance(input_tokens, int):
-            input_tokens = getattr(usage, "prompt_tokens", None)
+        input_tokens = _attr_token(usage, _INPUT_KEYS, "input_tokens")
+        output_tokens = _attr_token(usage, _OUTPUT_KEYS, "output_tokens")
 
-        output_tokens = getattr(usage, "output_tokens", None)
-        if not isinstance(output_tokens, int):
-            output_tokens = getattr(usage, "completion_tokens", None)
-
-    if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
+    if input_tokens is None or output_tokens is None:
         raise ValueError("usage must provide input/prompt tokens and output/completion tokens")
+
+    _validate_token_count(input_tokens, "input_tokens")
+    _validate_token_count(output_tokens, "output_tokens")
 
     return input_tokens, output_tokens
 

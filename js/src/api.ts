@@ -18,41 +18,73 @@ function roundMoney(amount: Decimal, places = DEFAULT_ROUNDING_PLACES): Decimal 
   return amount.toDecimalPlaces(places, Decimal.ROUND_HALF_UP);
 }
 
-function validateNonNegative(value: number, fieldName: string): void {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new Error(`${fieldName} must be a non-negative integer`);
+export const TEXT_INPUT_MESSAGE =
+  "llmcalc takes token counts, not text. Pass integer input/output token counts, " +
+  "or the provider's usage object (for example response.usage). llmcalc does not " +
+  "tokenize strings or message lists.";
+
+const INPUT_KEYS = ["input_tokens", "prompt_tokens", "inputTokens", "promptTokens"] as const;
+const OUTPUT_KEYS = [
+  "output_tokens",
+  "completion_tokens",
+  "outputTokens",
+  "completionTokens"
+] as const;
+
+function validateTokenCount(value: number, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`${fieldName} must be an integer, got ${typeof value}`);
   }
+  if (value < 0) {
+    throw new Error(`${fieldName} must be non-negative`);
+  }
+}
+
+/** A key that is present but not an integer is an error, not a miss, so the
+ * caller hears about the type instead of a misleading "not provided" message. */
+function coerceTokenValue(value: unknown, fieldName: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new Error(`${fieldName} must be an integer, got ${typeof value}`);
+  }
+  return value;
 }
 
 function valueFromMapping(
   usage: Record<string, unknown>,
-  keyOptions: readonly string[]
+  keyOptions: readonly string[],
+  fieldName: string
 ): number | null {
   for (const key of keyOptions) {
-    const value = usage[key];
-    if (typeof value === "number" && Number.isInteger(value)) {
-      return value;
+    if (key in usage && usage[key] !== null && usage[key] !== undefined) {
+      return coerceTokenValue(usage[key], fieldName);
     }
   }
   return null;
 }
 
 function getUsageTokens(usage: unknown): [number, number] {
+  if (typeof usage === "string" || Array.isArray(usage)) {
+    throw new Error(TEXT_INPUT_MESSAGE);
+  }
+
   if (typeof usage !== "object" || usage === null) {
     throw new Error("usage must provide input/prompt tokens and output/completion tokens");
   }
 
   const dictUsage = usage as Record<string, unknown>;
-  const inputTokens =
-    valueFromMapping(dictUsage, ["input_tokens", "prompt_tokens"]) ??
-    valueFromMapping(dictUsage, ["inputTokens", "promptTokens"]);
-  const outputTokens =
-    valueFromMapping(dictUsage, ["output_tokens", "completion_tokens"]) ??
-    valueFromMapping(dictUsage, ["outputTokens", "completionTokens"]);
+  if ("messages" in dictUsage) {
+    throw new Error(TEXT_INPUT_MESSAGE);
+  }
+
+  const inputTokens = valueFromMapping(dictUsage, INPUT_KEYS, "inputTokens");
+  const outputTokens = valueFromMapping(dictUsage, OUTPUT_KEYS, "outputTokens");
 
   if (inputTokens === null || outputTokens === null) {
     throw new Error("usage must provide input/prompt tokens and output/completion tokens");
   }
+
+  validateTokenCount(inputTokens, "inputTokens");
+  validateTokenCount(outputTokens, "outputTokens");
 
   return [inputTokens, outputTokens];
 }
@@ -80,8 +112,8 @@ export async function cost(
   outputTokens: number,
   options: ApiOptions = {}
 ): Promise<CostBreakdown | null> {
-  validateNonNegative(inputTokens, "inputTokens");
-  validateNonNegative(outputTokens, "outputTokens");
+  validateTokenCount(inputTokens, "inputTokens");
+  validateTokenCount(outputTokens, "outputTokens");
 
   const modelCosts = await model(modelName, options);
   if (modelCosts === null) {

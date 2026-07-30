@@ -164,3 +164,49 @@ async def test_package_async_alias(monkeypatch) -> None:
     result = await llmcalc.cost_async("gpt-5.1", input_tokens=10, output_tokens=5)
     assert result is not None
     assert result.total_cost == Decimal("0.000020")
+
+
+def test_bool_token_counts_are_rejected() -> None:
+    with pytest.raises(ValueError, match="must be an integer"):
+        api._get_usage_tokens({"prompt_tokens": True, "completion_tokens": False})
+
+
+def test_camel_case_usage_keys_are_accepted() -> None:
+    assert api._get_usage_tokens({"inputTokens": 10, "outputTokens": 5}) == (10, 5)
+    assert api._get_usage_tokens({"promptTokens": 7, "completionTokens": 3}) == (7, 3)
+
+
+def test_string_usage_explains_that_text_is_unsupported() -> None:
+    with pytest.raises(ValueError, match="token counts, not text"):
+        api._get_usage_tokens("hello world")
+
+
+def test_messages_array_explains_that_text_is_unsupported() -> None:
+    with pytest.raises(ValueError, match="token counts, not text"):
+        api._get_usage_tokens([{"role": "user", "content": "hi"}])
+
+
+def test_dict_with_messages_explains_that_text_is_unsupported() -> None:
+    with pytest.raises(ValueError, match="token counts, not text"):
+        api._get_usage_tokens({"messages": [{"role": "user", "content": "hi"}]})
+
+
+def test_float_token_counts_are_rejected() -> None:
+    with pytest.raises(ValueError):
+        api._get_usage_tokens({"prompt_tokens": 1.5, "completion_tokens": 2})
+
+
+def test_none_usage_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        api._get_usage_tokens(None)
+
+
+def test_empty_dict_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        api._get_usage_tokens({})
+
+
+def test_bool_rejected_by_cost(monkeypatch) -> None:
+    monkeypatch.setattr(api, "get_pricing_table", _fake_pricing_table)
+    with pytest.raises(ValueError, match="must be an integer"):
+        llmcalc.cost("gpt-5.1", input_tokens=True, output_tokens=5)
