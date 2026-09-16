@@ -1,12 +1,33 @@
 import json
 
+import pytest
 from typer.testing import CliRunner
 
 from llmcalc import __version__
 from llmcalc.cli import app
+from llmcalc.diagnostics import PricingDiagnostic, PricingParseResult
 from llmcalc.models import CostBreakdown, RawModelPricing
 
 runner = CliRunner()
+
+
+def _pricing_report() -> PricingParseResult:
+    pricing = RawModelPricing.model_validate(
+        {"input_cost_per_token": "0.01"}
+    ).to_model_pricing("valid")
+    return PricingParseResult(
+        models={"valid": pricing},
+        diagnostics=(
+            PricingDiagnostic(
+                model="broken",
+                severity="warning",
+                code="invalid_rate",
+                action="ignored_field",
+                path=("input_cost_per_token_above_1k_tokens",),
+                message="long-context pricing rate is malformed",
+            ),
+        ),
+    )
 
 
 def test_cli_version_long_flag() -> None:
@@ -19,6 +40,28 @@ def test_cli_version_short_flag() -> None:
     result = runner.invoke(app, ["-v"])
     assert result.exit_code == 0
     assert f"llmcalc {__version__}" in result.stdout
+
+
+def test_pricing_check_emits_structured_diagnostics(monkeypatch) -> None:
+    monkeypatch.setattr("llmcalc.cli.pricing_report", lambda **_kwargs: _pricing_report())
+
+    result = runner.invoke(app, ["pricing", "check", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["model_count"] == 1
+    assert payload["diagnostics"][0]["path"] == [
+        "input_cost_per_token_above_1k_tokens"
+    ]
+
+
+def test_pricing_check_strict_exits_nonzero_after_reporting(monkeypatch) -> None:
+    monkeypatch.setattr("llmcalc.cli.pricing_report", lambda **_kwargs: _pricing_report())
+
+    result = runner.invoke(app, ["pricing", "check", "--strict", "--json"])
+
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["diagnostic_count"] == 1
 
 
 def test_quote_reports_tier_applied(monkeypatch) -> None:
@@ -60,6 +103,51 @@ def test_quote_reports_no_tier_for_base_rates(monkeypatch) -> None:
 
     assert result.exit_code == 0
     assert json.loads(result.stdout)["tier_applied"] is None
+
+
+def test_quote_total_equals_displayed_input_plus_output(monkeypatch) -> None:
+    def _cost(**_kwargs):
+        return CostBreakdown(
+            input_cost="0.0000005",
+            output_cost="0.0000005",
+            total_cost="0.000001",
+            currency="USD",
+        )
+
+    monkeypatch.setattr("llmcalc.cli.cost", _cost)
+
+    result = runner.invoke(
+        app,
+        ["quote", "--model", "tiny", "--input", "1", "--output", "1", "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["input_cost"] == "0.000001"
+    assert payload["output_cost"] == "0.000001"
+    assert payload["total_cost"] == "0.000002"
+
+
+def test_quote_serializes_large_finite_costs(monkeypatch) -> None:
+    def _cost(**_kwargs):
+        return CostBreakdown(
+            input_cost="1e44",
+            output_cost="0",
+            total_cost="1e44",
+            currency="USD",
+        )
+
+    monkeypatch.setattr("llmcalc.cli.cost", _cost)
+    result = runner.invoke(
+        app,
+        ["quote", "--model", "large", "--input", "1", "--output", "0", "--json"],
+    )
+
+    assert result.exit_code == 0
+    expected = "1" + "0" * 44 + ".000000"
+    payload = json.loads(result.stdout)
+    assert payload["input_cost"] == expected
+    assert payload["total_cost"] == expected
 
 
 def test_model_command_reports_thresholds(monkeypatch) -> None:
@@ -117,3 +205,44 @@ def test_model_command_handles_tiered_model_without_base_rates(monkeypatch) -> N
     payload = json.loads(result.stdout)
     assert payload["input_cost_per_token"] is None
     assert payload["tier_count"] == 1
+
+
+@pytest.mark.parametrize("value", ["1.5", "1oops", "1e3", "1_000", "١٠٠٠"])
+def test_quote_rejects_non_ascii_integer_syntax(value: str) -> None:
+    result = runner.invoke(
+        app,
+        ["quote", "--model", "gpt-5.1", "--input", value, "--output", "1"],
+    )
+    assert result.exit_code != 0
+
+
+def test_quote_duplicate_options_use_last_value(monkeypatch) -> None:
+    captured: dict[str, int] = {}
+
+    def _cost(**kwargs):
+        captured["input_tokens"] = kwargs["input_tokens"]
+        return CostBreakdown(
+            input_cost="0",
+            output_cost="0",
+            total_cost="0",
+            currency="USD",
+        )
+
+    monkeypatch.setattr("llmcalc.cli.cost", _cost)
+    result = runner.invoke(
+        app,
+        [
+            "quote",
+            "--model",
+            "gpt-5.1",
+            "--input",
+            "1",
+            "--input",
+            "2",
+            "--output",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["input_tokens"] == 2

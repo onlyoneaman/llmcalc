@@ -1,3 +1,5 @@
+import type { PricingDiagnostic } from "./diagnostics.js";
+
 export class PricingError extends Error {
   constructor(message: string) {
     super(message);
@@ -13,8 +15,18 @@ export class PricingFetchError extends PricingError {
 }
 
 export class PricingSchemaError extends PricingError {
-  constructor(message: string) {
+  readonly diagnostics: PricingDiagnostic[];
+
+  constructor(message: string, diagnostics: PricingDiagnostic[] = []) {
     super(message);
     this.name = "PricingSchemaError";
+    this.diagnostics = diagnostics;
+  }
+}
+
+export class PricingHistoryError extends PricingError {
+  constructor(message: string) {
+    super(message);
+    this.name = "PricingHistoryError";
   }
 }

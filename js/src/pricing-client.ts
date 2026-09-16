@@ -1,12 +1,17 @@
 import {
+  DEFAULT_CURRENCY,
+  DEFAULT_PRICING_URL,
   getDefaultCurrency,
   getPricingUrl,
   getUserAgent,
   resolveCacheTimeout
 } from "./config.js";
 import { loadCachedPricing, saveCachedPricing } from "./cache.js";
+import { type PricingDiagnostic, type PricingParseResult } from "./diagnostics.js";
 import { PricingFetchError, PricingSchemaError } from "./errors.js";
-import { type ModelPricing, toModelPricing } from "./models.js";
+import { type ModelPricing } from "./models.js";
+import { getHistoricalPricingPayload } from "./pricing-history.js";
+import { inspectModelPricing } from "./pricing-parser.js";
 
 export interface FetchResponseLike {
   ok: boolean;
@@ -16,6 +21,7 @@ export interface FetchResponseLike {
 
 export interface FetchOptionsLike {
   headers?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 export type FetchLike = (
@@ -26,19 +32,25 @@ export type FetchLike = (
 export interface FetchPricingPayloadOptions {
   pricingUrl?: string;
   fetchImpl?: FetchLike;
+  timeoutMs?: number;
 }
 
 export interface GetPricingTableOptions {
   cacheTimeout?: number;
   pricingUrl?: string;
   fetchImpl?: FetchLike;
+  snapshotAt?: string;
+}
+
+export interface GetPricingReportOptions extends GetPricingTableOptions {
+  strict?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function getFetchImpl(fetchImpl?: FetchLike): FetchLike {
+export function getFetchImpl(fetchImpl?: FetchLike): FetchLike {
   if (fetchImpl !== undefined) {
     return fetchImpl;
   }
@@ -56,11 +68,14 @@ export async function fetchPricingPayload(
 ): Promise<Record<string, unknown>> {
   const source = getPricingUrl(options.pricingUrl);
   const activeFetch = getFetchImpl(options.fetchImpl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 10_000);
 
   let payload: unknown;
   try {
     const response = await activeFetch(source, {
-      headers: { "User-Agent": getUserAgent() }
+      headers: { "User-Agent": getUserAgent() },
+      signal: controller.signal
     });
 
     if (!response.ok) {
@@ -72,7 +87,9 @@ export async function fetchPricingPayload(
     if (error instanceof PricingSchemaError) {
       throw error;
     }
-    throw new PricingFetchError(`failed to fetch pricing data from ${source}`);
+    throw new PricingFetchError("failed to fetch pricing data");
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (!isRecord(payload)) {
@@ -82,65 +99,127 @@ export async function fetchPricingPayload(
   return payload;
 }
 
-export function parsePricingPayload(payload: Record<string, unknown>): Record<string, ModelPricing> {
-  const defaultCurrency = getDefaultCurrency();
+export function parsePricingPayload(
+  payload: Record<string, unknown>,
+  defaultCurrency = DEFAULT_CURRENCY
+): Record<string, ModelPricing> {
+  return parsePricingPayloadWithDiagnostics(payload, defaultCurrency).models;
+}
+
+export function parsePricingPayloadWithDiagnostics(
+  payload: Record<string, unknown>,
+  defaultCurrency = DEFAULT_CURRENCY,
+  strict = false
+): PricingParseResult {
   const wrappedData = payload.data;
   const rawTable = isRecord(wrappedData) ? wrappedData : payload;
 
   const parsed: Record<string, ModelPricing> = {};
+  const diagnostics: PricingDiagnostic[] = [];
   for (const [modelName, modelData] of Object.entries(rawTable)) {
+    if (modelName === "sample_spec") {
+      diagnostics.push({
+        model: modelName,
+        severity: "info",
+        code: "excluded_metadata_entry",
+        action: "skipped_entry",
+        path: [],
+        message: "known pricing schema example was excluded"
+      });
+      continue;
+    }
     if (!isRecord(modelData)) {
+      diagnostics.push({
+        model: modelName,
+        severity: "error",
+        code: "entry_not_object",
+        action: "skipped_entry",
+        path: [],
+        message: "pricing entry must be an object"
+      });
       continue;
     }
 
-    try {
-      parsed[modelName] = toModelPricing(modelName, modelData, defaultCurrency);
-    } catch {
-      // Ignore non-model metadata entries.
+    const inspected = inspectModelPricing(modelName, modelData, defaultCurrency);
+    diagnostics.push(...inspected.diagnostics);
+    if (inspected.pricing !== null) {
+      parsed[modelName] = inspected.pricing;
     }
   }
 
   if (Object.keys(parsed).length === 0) {
-    throw new PricingSchemaError("no valid model pricing entries found");
+    throw new PricingSchemaError("no valid model pricing entries found", diagnostics);
+  }
+  if (strict && diagnostics.some((item) => item.severity !== "info")) {
+    throw new PricingSchemaError(
+      "pricing payload contains invalid entries",
+      diagnostics
+    );
   }
 
-  return parsed;
+  return { models: parsed, diagnostics };
 }
 
-export async function getPricingTable(
-  options: GetPricingTableOptions = {}
-): Promise<Record<string, ModelPricing>> {
+export async function getPricingReport(
+  options: GetPricingReportOptions = {}
+): Promise<PricingParseResult> {
   const cacheTimeout = resolveCacheTimeout(options.cacheTimeout);
+  const source = getPricingUrl(options.pricingUrl);
+  const defaultCurrency =
+    source === DEFAULT_PRICING_URL ? DEFAULT_CURRENCY : getDefaultCurrency();
+  if (options.snapshotAt !== undefined) {
+    if (source !== DEFAULT_PRICING_URL) {
+      throw new Error("snapshotAt is only supported with the default LiteLLM pricing source");
+    }
+    const historical = await getHistoricalPricingPayload(
+      options.snapshotAt,
+      getFetchImpl(options.fetchImpl)
+    );
+    return parsePricingPayloadWithDiagnostics(
+      historical,
+      DEFAULT_CURRENCY,
+      options.strict ?? false
+    );
+  }
 
-  const cachedData = await loadCachedPricing(cacheTimeout);
+  const cachedData = await loadCachedPricing(cacheTimeout, source);
   if (cachedData !== null) {
     try {
-      return parsePricingPayload(cachedData);
+      return parsePricingPayloadWithDiagnostics(
+        cachedData,
+        defaultCurrency,
+        options.strict ?? false
+      );
     } catch (error) {
       if (!(error instanceof PricingSchemaError)) {
+        throw error;
+      }
+      if (options.strict === true) {
         throw error;
       }
     }
   }
 
+  const fetchedPayload = await fetchPricingPayload({
+    pricingUrl: source,
+    ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {})
+  });
+
+  const report = parsePricingPayloadWithDiagnostics(
+    fetchedPayload,
+    defaultCurrency,
+    options.strict ?? false
+  );
   try {
-    const fetchedPayload = await fetchPricingPayload({
-      ...(options.pricingUrl !== undefined ? { pricingUrl: options.pricingUrl } : {}),
-      ...(options.fetchImpl !== undefined ? { fetchImpl: options.fetchImpl } : {})
-    });
-
-    const parsed = parsePricingPayload(fetchedPayload);
-    await saveCachedPricing(fetchedPayload);
-    return parsed;
-  } catch (error) {
-    if (!(error instanceof PricingFetchError)) {
-      throw error;
-    }
-
-    if (cachedData !== null) {
-      return parsePricingPayload(cachedData);
-    }
-
-    throw error;
+    await saveCachedPricing(fetchedPayload, source);
+  } catch {
+    // Cache persistence must not discard pricing that was fetched and parsed successfully.
   }
+  return report;
+}
+
+export async function getPricingTable(
+  options: GetPricingTableOptions = {}
+): Promise<Record<string, ModelPricing>> {
+  return (await getPricingReport(options)).models;
 }

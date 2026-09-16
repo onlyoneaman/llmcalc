@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+## 0.2.1 - 2026-09-16
+
+### Fixed
+- Token tiers now select one request-wide rate from total input length, including LiteLLM's cache, reasoning and input-only-tier fallbacks. The previous graduated calculation underquoted `dashscope/qwen-flash` at 300k input / 1k output by about 68.6%.
+- Long-context thresholds now include the exact cutoff for xAI and remain strictly above the cutoff for other providers.
+- Live provider metadata now reads LiteLLM's `litellm_provider` field instead of returning `null` for every model.
+- Explicit zero-priced cache rates remain free in Python instead of falling back to the base input rate.
+- `usage()` now recognizes Gemini and Gemini Live usage metadata, Anthropic thinking tokens, Bedrock cache-write aggregates, OpenAI Responses cache-write details, provider processing modes, one-hour cache creation, audio/image token details, web-search requests, and Google Maps grounding requests. Inconsistent totals and unpriced dimensions are rejected instead of silently applying standard text-token rates.
+- Custom pricing URLs no longer reuse a cache populated from another source, raw source URLs and credentials are not persisted or exposed in fetch errors, cache writes are atomic and best-effort, and implausible future cache timestamps are rejected.
+- `LLMCALC_CURRENCY` now applies only to custom pricing sources; it is a label override, not currency conversion.
+- Both CLIs reject partial, non-ASCII and unsafe integer forms, accept `--option=value`, use the last duplicate option, and reject unknown options and stray arguments consistently.
+- Cross-language parity now runs in a dedicated CI job after building the JavaScript CLI. A scheduled live-data job checks every current range-tier schedule, provider metadata, threshold, cache and input-only pricing surfaces.
+- Package fallback versions and npm lockfile metadata now agree with version `0.2.1`.
+- Python distributions now emit PEP 639 license metadata and the author URL; development installs include the backend required by the documented no-isolation build.
+- Batch discounts now stack with long-context pricing, Gemini batch cache and modality rules follow the provider's published behavior, and mode-specific reasoning follows the selected output rate instead of retaining a standard-mode rate.
+
+### Added
+- Standard, batch, priority, flex, and fast processing-mode selection, including mode-specific long-context, cache, audio, and image rates. Provider-reported service tiers take precedence when calculating from a usage object.
+- One-hour and audio cache-creation pricing, cached audio pricing, audio/image input and output token pricing, direct and result-tiered per-query pricing, selectable low/medium/high-context web-search pricing, Google Maps grounding pricing, US/EU data-residency uplifts, and Vertex non-global endpoint uplifts. Cost results expose each new component, the selected processing mode, and the regional multiplier.
+- Completed-day LiteLLM repository snapshots through `snapshot_at` in Python, `snapshotAt` in JavaScript, and `--snapshot-at YYYY-MM-DD` in both CLIs. History begins on `2023-09-06`, uses the final root-file commit for the requested UTC day, and is cached by commit. Snapshot history represents data recorded in LiteLLM, not authoritative provider effective dates or invoice reconstruction.
+- Structured pricing-parser diagnostics through `pricing_report()` / `pricing_report_async()` and `pricingReport()` / `pricingReportAsync()`. Diagnostics identify skipped entries and ignored fields with a severity, stable code, action, path, and message.
+- `llmcalc pricing check [--strict] [--json]` for inspecting the complete parser report. Strict mode exits nonzero for warnings or errors after printing the report; informational exclusions remain allowed.
+
+### Changed
+- Library calculations use 50 significant digits; six-decimal rounding is limited to CLI serialization.
+- Input-only token-priced models can be quoted when output tokens are zero.
+- CI covers Python 3.11 through 3.14 and Node 20, 22, and 24 with GitHub Actions pinned to immutable commits.
+- The Typer minimum is now `0.27.2`; the previous `0.12` floor is incompatible with current Click releases and could make every CLI command fail.
+- The JavaScript package now builds with TypeScript 7 and declares Node's types explicitly.
+
 ## 0.2.0
 
 ### Fixed

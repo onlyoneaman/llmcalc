@@ -1,0 +1,169 @@
+{
+  "payload": {
+    "sample_spec": {"input_cost_per_token": 0},
+    "valid-model": {
+      "input_cost_per_token": "0.01",
+      "output_cost_per_token": "0.02",
+      "litellm_provider": "test"
+    },
+    "valid-unsupported-video": {
+      "input_cost_per_token": "0.01",
+      "input_cost_per_video_per_second": "0.1"
+    },
+    "query-tier-model": {
+      "tiered_pricing": [
+        {"input_cost_per_query": "0.005", "max_results_range": [0, 25]}
+      ]
+    },
+    "unsupported-image-model": {"output_cost_per_image": "0.04"},
+    "unpriced-model": {"mode": "chat", "max_input_tokens": 1000},
+    "unknown-search-context": {
+      "search_context_cost_per_query": {"search_context_size_ultra": "1"}
+    },
+    "not-object": "invalid",
+    "invalid-rate": {"input_cost_per_token": "not-a-number"},
+    "invalid-provider": {"input_cost_per_token": "0.01", "litellm_provider": 42},
+    "malformed-tier-only": {
+      "tiered_pricing": [{"range": [0, 100], "input_cost_per_token": "bad"}]
+    },
+    "malformed-query-tier-only": {
+      "tiered_pricing": [{"input_cost_per_query": "bad", "max_results_range": [0, 25]}]
+    },
+    "valid-malformed-tier": {
+      "input_cost_per_token": "0.01",
+      "tiered_pricing": [{"range": [100, 0], "input_cost_per_token": "0.02"}]
+    },
+    "valid-invalid-threshold": {
+      "input_cost_per_token": "0.01",
+      "input_cost_per_token_above_100k_tokens": "bad"
+    },
+    "valid-invalid-date": {"input_cost_per_token": "0.01", "last_updated": 42},
+    "valid-invalid-provider-uplift": {
+      "input_cost_per_token": "0.01",
+      "provider_specific_entry": {"us": "bad"}
+    }
+  },
+  "parsed_models": [
+    "valid-model",
+    "valid-unsupported-video",
+    "query-tier-model",
+    "valid-malformed-tier",
+    "valid-invalid-threshold",
+    "valid-invalid-date",
+    "valid-invalid-provider-uplift"
+  ],
+  "diagnostics": [
+    {
+      "model": "sample_spec",
+      "severity": "info",
+      "code": "excluded_metadata_entry",
+      "action": "skipped_entry",
+      "path": [],
+      "message": "known pricing schema example was excluded"
+    },
+    {
+      "model": "valid-unsupported-video",
+      "severity": "info",
+      "code": "unsupported_pricing_unit",
+      "action": "ignored_field",
+      "path": ["input_cost_per_video_per_second"],
+      "message": "pricing field uses a billing unit that llmcalc does not support"
+    },
+    {
+      "model": "unsupported-image-model",
+      "severity": "info",
+      "code": "unsupported_pricing_unit",
+      "action": "skipped_entry",
+      "path": [],
+      "message": "entry uses pricing units that llmcalc does not support"
+    },
+    {
+      "model": "unpriced-model",
+      "severity": "info",
+      "code": "missing_supported_pricing",
+      "action": "skipped_entry",
+      "path": [],
+      "message": "entry has no supported pricing fields"
+    },
+    {
+      "model": "unknown-search-context",
+      "severity": "info",
+      "code": "unsupported_pricing_unit",
+      "action": "skipped_entry",
+      "path": [],
+      "message": "entry uses pricing units that llmcalc does not support"
+    },
+    {
+      "model": "not-object",
+      "severity": "error",
+      "code": "entry_not_object",
+      "action": "skipped_entry",
+      "path": [],
+      "message": "pricing entry must be an object"
+    },
+    {
+      "model": "invalid-rate",
+      "severity": "error",
+      "code": "invalid_rate",
+      "action": "skipped_entry",
+      "path": ["input_cost_per_token"],
+      "message": "supported pricing rate must be a finite non-negative decimal"
+    },
+    {
+      "model": "invalid-provider",
+      "severity": "error",
+      "code": "invalid_metadata",
+      "action": "skipped_entry",
+      "path": ["litellm_provider"],
+      "message": "pricing metadata must use the expected type"
+    },
+    {
+      "model": "malformed-tier-only",
+      "severity": "error",
+      "code": "invalid_tier_schedule",
+      "action": "skipped_entry",
+      "path": ["tiered_pricing"],
+      "message": "request-tier pricing schedule is malformed"
+    },
+    {
+      "model": "malformed-query-tier-only",
+      "severity": "error",
+      "code": "invalid_tier_schedule",
+      "action": "skipped_entry",
+      "path": ["tiered_pricing"],
+      "message": "request-tier pricing schedule is malformed"
+    },
+    {
+      "model": "valid-malformed-tier",
+      "severity": "warning",
+      "code": "invalid_tier_schedule",
+      "action": "ignored_field",
+      "path": ["tiered_pricing"],
+      "message": "request-tier pricing schedule is malformed"
+    },
+    {
+      "model": "valid-invalid-threshold",
+      "severity": "warning",
+      "code": "invalid_threshold_rate",
+      "action": "ignored_field",
+      "path": ["input_cost_per_token_above_100k_tokens"],
+      "message": "long-context pricing rate is malformed"
+    },
+    {
+      "model": "valid-invalid-date",
+      "severity": "warning",
+      "code": "invalid_metadata",
+      "action": "ignored_field",
+      "path": ["last_updated"],
+      "message": "last_updated must be a string"
+    },
+    {
+      "model": "valid-invalid-provider-uplift",
+      "severity": "warning",
+      "code": "invalid_rate",
+      "action": "ignored_field",
+      "path": ["provider_specific_entry", "us"],
+      "message": "provider pricing multiplier must be a finite positive decimal"
+    }
+  ]
+}

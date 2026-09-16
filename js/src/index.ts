@@ -4,10 +4,20 @@ export {
   costAsync,
   model,
   modelAsync,
+  pricingReport,
+  pricingReportAsync,
   usage,
   usageAsync,
   DEFAULT_CACHE_TIMEOUT
 } from "./api.js";
+export type { ApiOptions, PricingReportOptions } from "./api.js";
+
+export type {
+  DiagnosticAction,
+  DiagnosticSeverity,
+  PricingDiagnostic,
+  PricingParseResult
+} from "./diagnostics.js";
 
 export type { CostBreakdown, ModelPricing } from "./models.js";
 
@@ -21,4 +31,9 @@ export {
   getUserAgent
 } from "./config.js";
 
-export { PricingError, PricingFetchError, PricingSchemaError } from "./errors.js";
+export {
+  PricingError,
+  PricingFetchError,
+  PricingHistoryError,
+  PricingSchemaError
+} from "./errors.js";

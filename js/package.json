@@ -1,7 +1,8 @@
 {
   "name": "llmcalc",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Calculate LLM token costs from litellm pricing data",
+  "author": "Aman (https://amankumar.ai)",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -46,7 +47,7 @@
     "decimal.js": "^10.5.0"
   },
   "devDependencies": {
-    "@types/node": "^22.13.10",
-    "typescript": "^5.8.2"
+    "@types/node": "^22.20.3",
+    "typescript": "^7.0.2"
   }
 }

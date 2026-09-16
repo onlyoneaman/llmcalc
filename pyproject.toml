@@ -1,30 +1,33 @@
 [build-system]
-requires = ["hatchling>=1.25.0"]
+requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "llmcalc"
-version = "0.2.0"
+version = "0.2.1"
 description = "Calculate LLM token costs from litellm pricing data"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-  { name = "Aman", url = "https://github.com/onlyoneaman" }
+  { name = "Aman" }
 ]
 keywords = ["llm", "pricing", "tokens", "cost"]
 classifiers = [
   "Development Status :: 3 - Alpha",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Typing :: Typed",
 ]
 dependencies = [
   "httpx>=0.27,<1",
   "platformdirs>=4.2,<5",
   "pydantic>=2.8,<3",
-  "typer>=0.12,<1",
+  "typer>=0.27.2,<1",
 ]
 
 [project.urls]
@@ -32,17 +35,20 @@ Homepage = "https://github.com/onlyoneaman/llmcalc"
 Repository = "https://github.com/onlyoneaman/llmcalc"
 Issues = "https://github.com/onlyoneaman/llmcalc/issues"
 Changelog = "https://github.com/onlyoneaman/llmcalc/blob/main/CHANGELOG.md"
+Author = "https://amankumar.ai"
 
 [project.scripts]
 llmcalc = "llmcalc.cli:app"
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8.2,<9",
-  "pytest-asyncio>=0.23,<1",
+  "build>=1.2,<2",
+  "hatchling>=1.27,<2",
+  "pytest>=8.2,<10",
+  "pytest-asyncio>=0.23,<2",
   "ruff>=0.6,<1",
-  "mypy>=1.10,<2",
-  "twine>=5,<7",
+  "mypy>=1.10,<3",
+  "twine>=5,<8",
 ]
 
 [tool.pytest.ini_options]

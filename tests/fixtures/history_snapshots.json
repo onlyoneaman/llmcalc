@@ -1,0 +1,35 @@
+{
+  "snapshots": [
+    {
+      "snapshot_at": "2024-01-01",
+      "sha": "1111111111111111111111111111111111111111",
+      "committed_at": "2024-01-01T12:00:00Z",
+      "payload": {
+        "history-model": {
+          "input_cost_per_token": "0.01",
+          "output_cost_per_token": "0.02",
+          "litellm_provider": "test"
+        }
+      },
+      "expected_total": "2"
+    },
+    {
+      "snapshot_at": "2025-01-01",
+      "sha": "2222222222222222222222222222222222222222",
+      "committed_at": "2025-01-01T12:00:00Z",
+      "payload": {
+        "history-model": {
+          "input_cost_per_token": "0.03",
+          "output_cost_per_token": "0.04",
+          "litellm_provider": "test"
+        },
+        "new-model": {
+          "input_cost_per_token": "0.005",
+          "output_cost_per_token": "0.01",
+          "litellm_provider": "test"
+        }
+      },
+      "expected_total": "5"
+    }
+  ]
+}

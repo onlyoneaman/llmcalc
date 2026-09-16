@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export const APP_NAME = "llmcalc";
-export const FALLBACK_VERSION = "0.1.2";
+export const FALLBACK_VERSION = "0.2.1";
 export const DEFAULT_CACHE_TIMEOUT_SECONDS = 43200;
 export const DEFAULT_CURRENCY = "USD";
 export const DEFAULT_PRICING_URL =
@@ -36,7 +36,7 @@ export function getUserAgent(): string {
 }
 
 export function getPricingUrl(explicitUrl?: string): string {
-  return explicitUrl ?? process.env.LLMCALC_PRICING_URL ?? DEFAULT_PRICING_URL;
+  return explicitUrl || process.env.LLMCALC_PRICING_URL || DEFAULT_PRICING_URL;
 }
 
 export function getDefaultCurrency(): string {
@@ -46,8 +46,8 @@ export function getDefaultCurrency(): string {
 
 export function resolveCacheTimeout(cacheTimeout?: number): number {
   if (cacheTimeout !== undefined) {
-    if (cacheTimeout <= 0) {
-      throw new Error("cacheTimeout must be positive");
+    if (!Number.isSafeInteger(cacheTimeout) || cacheTimeout <= 0) {
+      throw new Error("cacheTimeout must be a positive safe integer");
     }
     return cacheTimeout;
   }
@@ -57,8 +57,9 @@ export function resolveCacheTimeout(cacheTimeout?: number): number {
     return DEFAULT_CACHE_TIMEOUT_SECONDS;
   }
 
-  const parsed = Number.parseInt(envValue, 10);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  const normalized = envValue.trim();
+  const parsed = Number(normalized);
+  if (!/^[+]?\d+$/.test(normalized) || !Number.isSafeInteger(parsed) || parsed <= 0) {
     return DEFAULT_CACHE_TIMEOUT_SECONDS;
   }
 

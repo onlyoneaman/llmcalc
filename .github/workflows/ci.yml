@@ -4,25 +4,33 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
 
 jobs:
   python:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e '.[dev]'
-          pip install build
 
       - name: Lint
         run: python -m ruff check .
@@ -31,7 +39,7 @@ jobs:
         run: python -m mypy llmcalc
 
       - name: Test
-        run: python -m pytest
+        run: python -m pytest -m "not network"
 
       - name: Build
         run: python -m build
@@ -41,6 +49,9 @@ jobs:
 
   javascript:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["20", "22", "24"]
 
     defaults:
       run:
@@ -48,12 +59,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
         run: npm ci
@@ -63,6 +74,69 @@ jobs:
 
       - name: Test
         run: npm run test
+        env:
+          SKIP_NETWORK: "1"
 
       - name: Pack dry run
         run: npm pack --dry-run
+
+  parity:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "20"
+
+      - name: Install Python dependencies
+        run: pip install -e '.[dev]'
+
+      - name: Install JavaScript dependencies
+        working-directory: js
+        run: npm ci
+
+      - name: Build JavaScript package
+        working-directory: js
+        run: npm run build
+
+      - name: Test cross-language parity
+        run: python -m pytest tests/test_parity.py
+
+  live-pricing-compatibility:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.14"
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+
+      - name: Test Python pricing compatibility
+        run: |
+          pip install -e '.[dev]'
+          python -m pytest -m network
+
+      - name: Test JavaScript pricing compatibility
+        working-directory: js
+        run: |
+          npm ci
+          npm run build
+          node --test tests/live-pricing.test.mjs

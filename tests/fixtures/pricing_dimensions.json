@@ -1,0 +1,222 @@
+{
+  "pricing": {
+    "input_cost_per_token": "0.01",
+    "output_cost_per_token": "0.02",
+    "cache_read_input_token_cost": "0.001",
+    "cache_creation_input_token_cost": "0.012",
+    "cache_creation_input_audio_token_cost": "0.004",
+    "cache_creation_input_token_cost_above_1hr": "0.02",
+    "output_cost_per_reasoning_token": "0.03",
+    "input_cost_per_audio_token": "0.04",
+    "output_cost_per_audio_token": "0.05",
+    "input_cost_per_image_token": "0.06",
+    "output_cost_per_image_token": "0.07",
+    "input_cost_per_query": "0.25",
+    "search_context_cost_per_query": {
+      "search_context_size_low": "0.4",
+      "search_context_size_medium": "0.5",
+      "search_context_size_high": "0.6"
+    },
+    "google_maps_grounding_cost_per_query": "0.75",
+    "web_search_billing_unit": "per_prompt",
+    "regional_processing_uplift_multiplier_us": "1.1",
+    "regional_processing_uplift_multiplier_eu": "1.2",
+    "regional_endpoint_uplift_multiplier": "1.3",
+    "provider_specific_entry": {"us": "1.1"},
+    "input_cost_per_token_above_200_tokens": "0.02",
+    "output_cost_per_token_above_200_tokens": "0.04",
+    "input_cost_per_token_batches": "0.005",
+    "output_cost_per_token_batches": "0.01",
+    "input_cost_per_audio_token_batches": "0.02",
+    "input_cost_per_image_token_batches": "0.03",
+    "input_cost_per_token_priority": "0.02",
+    "output_cost_per_token_priority": "0.04",
+    "cache_read_input_token_cost_priority": "0.002",
+    "cache_creation_input_token_cost_priority": "0.024",
+    "input_cost_per_audio_token_priority": "0.08",
+    "input_cost_per_token_above_100_tokens_priority": "0.03",
+    "output_cost_per_token_above_100_tokens_priority": "0.06",
+    "cache_read_input_token_cost_above_100_tokens_priority": "0.003",
+    "cache_creation_input_token_cost_above_100_tokens_priority": "0.036",
+    "input_cost_per_token_flex": "0.006",
+    "output_cost_per_token_flex": "0.012",
+    "cache_read_input_token_cost_flex": "0.0006",
+    "cache_creation_input_token_cost_flex": "0.0072",
+    "litellm_provider": "test"
+  },
+  "cases": [
+    {
+      "name": "standard token pricing",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {},
+      "expected": {"input_cost": "1", "output_cost": "1", "total_cost": "2"}
+    },
+    {
+      "name": "batch token and media pricing",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {"processing_mode": "batch", "input_audio_tokens": 20, "input_image_tokens": 10},
+      "expected": {"input_cost": "1.05", "output_cost": "0.5", "total_cost": "1.55"}
+    },
+    {
+      "name": "batch derives cache discount from input ratio",
+      "input_tokens": 100,
+      "output_tokens": 0,
+      "options": {"processing_mode": "batch", "cached_tokens": 20},
+      "expected": {"input_cost": "0.41", "output_cost": "0", "total_cost": "0.41"}
+    },
+    {
+      "name": "batch discount stacks with long context pricing",
+      "input_tokens": 201,
+      "output_tokens": 50,
+      "options": {"processing_mode": "batch"},
+      "expected": {"input_cost": "2.01", "output_cost": "1", "total_cost": "3.01"}
+    },
+    {
+      "name": "gemini batch preserves cache price and discounts audio",
+      "pricing": {
+        "input_cost_per_token": "0.01",
+        "output_cost_per_token": "0.02",
+        "cache_read_input_token_cost": "0.001",
+        "input_cost_per_audio_token": "0.04",
+        "input_cost_per_token_batches": "0.005",
+        "output_cost_per_token_batches": "0.01",
+        "litellm_provider": "gemini"
+      },
+      "input_tokens": 100,
+      "output_tokens": 0,
+      "options": {"processing_mode": "batch", "cached_tokens": 20, "input_audio_tokens": 20},
+      "expected": {"input_cost": "0.72", "output_cost": "0", "total_cost": "0.72"}
+    },
+    {
+      "name": "request tier stacks with batch mode",
+      "pricing": {
+        "tiered_pricing": [
+          {
+            "range": [0, 1000],
+            "input_cost_per_token": "0.02",
+            "output_cost_per_token": "0.04",
+            "cache_read_input_token_cost": "0.004"
+          }
+        ],
+        "input_cost_per_token_batches": "0.005",
+        "output_cost_per_token_batches": "0.01"
+      },
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {"processing_mode": "batch", "cached_tokens": 20},
+      "expected": {"input_cost": "0.42", "output_cost": "0.5", "total_cost": "0.92"}
+    },
+    {
+      "name": "priority pricing at strict threshold boundary",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {"processing_mode": "priority"},
+      "expected": {"input_cost": "2", "output_cost": "2", "total_cost": "4"}
+    },
+    {
+      "name": "priority pricing above threshold",
+      "input_tokens": 101,
+      "output_tokens": 50,
+      "options": {"processing_mode": "priority"},
+      "expected": {"input_cost": "3.03", "output_cost": "3", "total_cost": "6.03"}
+    },
+    {
+      "name": "priority reasoning follows priority output",
+      "input_tokens": 0,
+      "output_tokens": 10,
+      "options": {"processing_mode": "priority", "reasoning_tokens": 10},
+      "expected": {"input_cost": "0", "output_cost": "0.4", "total_cost": "0.4"}
+    },
+    {
+      "name": "priority threshold reasoning follows threshold output",
+      "input_tokens": 101,
+      "output_tokens": 10,
+      "options": {"processing_mode": "priority", "reasoning_tokens": 10},
+      "expected": {"input_cost": "3.03", "output_cost": "0.6", "total_cost": "3.63"}
+    },
+    {
+      "name": "flex pricing",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {"processing_mode": "flex"},
+      "expected": {"input_cost": "0.6", "output_cost": "0.6", "total_cost": "1.2"}
+    },
+    {
+      "name": "provider fast multiplier supplies fast pricing",
+      "pricing": {
+        "input_cost_per_token": "0.01",
+        "output_cost_per_token": "0.02",
+        "provider_specific_entry": {"fast": "2"},
+        "litellm_provider": "anthropic"
+      },
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {"processing_mode": "fast"},
+      "expected": {"input_cost": "2", "output_cost": "2", "total_cost": "4"}
+    },
+    {
+      "name": "one hour cache creation pricing",
+      "input_tokens": 100,
+      "output_tokens": 0,
+      "options": {"cache_creation_tokens": 40, "cache_creation_tokens_1h": 10},
+      "expected": {"input_cost": "1.16", "output_cost": "0", "total_cost": "1.16"}
+    },
+    {
+      "name": "audio cache creation uses its published rate",
+      "input_tokens": 100,
+      "output_tokens": 0,
+      "options": {"cache_creation_tokens": 40, "cache_creation_audio_tokens": 10, "input_audio_tokens": 20},
+      "expected": {"input_cost": "1.3", "output_cost": "0", "total_cost": "1.3", "cache_creation_audio_cost": "0.04"}
+    },
+    {
+      "name": "audio image and reasoning token pricing",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {
+        "input_audio_tokens": 20,
+        "input_image_tokens": 10,
+        "output_audio_tokens": 10,
+        "output_image_tokens": 5,
+        "reasoning_tokens": 5
+      },
+      "expected": {"input_cost": "2.1", "output_cost": "1.6", "total_cost": "3.7"}
+    },
+    {
+      "name": "web search context selects its published rate",
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "options": {"web_search_requests": 2, "web_search_context": "high"},
+      "expected": {"input_cost": "0.6", "output_cost": "0", "total_cost": "0.6", "query_cost": "0.6"}
+    },
+    {
+      "name": "regional uplift applies to token and direct query costs",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {"query_count": 3, "web_search_requests": 4, "maps_grounding_requests": 2, "region": "us"},
+      "expected": {"input_cost": "3.175", "output_cost": "1.1", "total_cost": "4.275", "query_cost": "2.075"}
+    },
+    {
+      "name": "vertex regional endpoint uplift applies",
+      "input_tokens": 100,
+      "output_tokens": 50,
+      "options": {"region": "regional"},
+      "expected": {"input_cost": "1.3", "output_cost": "1.3", "total_cost": "2.6"}
+    },
+    {
+      "name": "query result tiers select per query price",
+      "pricing": {
+        "tiered_pricing": [
+          {"input_cost_per_query": "0.005", "max_results_range": [0, 25]},
+          {"input_cost_per_query": "0.025", "max_results_range": [26, 100]}
+        ],
+        "litellm_provider": "exa_ai"
+      },
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "options": {"query_count": 2, "query_results": 26},
+      "expected": {"input_cost": "0.05", "output_cost": "0", "total_cost": "0.05", "query_cost": "0.05"}
+    }
+  ]
+}

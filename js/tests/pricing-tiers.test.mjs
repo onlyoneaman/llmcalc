@@ -7,12 +7,13 @@ import { fileURLToPath } from "node:url";
 import { Decimal } from "decimal.js";
 
 import {
-  graduatedCost,
   parseBaseRates,
   parseThresholds,
   parseTiers,
   rateFor,
-  resolveRates
+  resolveRates,
+  resolveTierRates,
+  selectTierRates
 } from "../dist/pricing-tiers.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +33,8 @@ for (const testCase of fixture.thresholds) {
     const [rates, tier] = resolveRates(
       parseBaseRates(pricing),
       thresholds,
-      testCase.input_tokens
+      testCase.input_tokens,
+      pricing.litellm_provider ?? null
     );
 
     assert.equal(tier, testCase.expected.tier_applied);
@@ -50,17 +52,27 @@ for (const testCase of fixture.thresholds) {
   });
 }
 
-for (const testCase of fixture.graduated) {
-  test(`graduated: ${testCase.name}`, () => {
+for (const testCase of fixture.request_tiers) {
+  test(`request tier: ${testCase.name}`, () => {
     const tiers = parseTiers(testCase.pricing.tiered_pricing);
     assert.ok(tiers.length > 0);
+    const selected = selectTierRates(tiers, testCase.input_tokens);
+    if (testCase.input_tokens === 0) {
+      assert.equal(selected, null);
+      return;
+    }
+    assert.ok(selected !== null);
+    const rates = resolveTierRates(parseBaseRates(testCase.pricing), selected);
+    const inputRate = rateFor(rates, "input");
+    const outputRate = rateFor(rates, "output");
+    assert.ok(inputRate !== null && outputRate !== null);
 
     assert.equal(
-      money(graduatedCost(testCase.input_tokens, tiers, "input")),
+      money(new Decimal(testCase.input_tokens).mul(inputRate)),
       testCase.expected.input_cost
     );
     assert.equal(
-      money(graduatedCost(testCase.output_tokens, tiers, "output")),
+      money(new Decimal(testCase.output_tokens).mul(outputRate)),
       testCase.expected.output_cost
     );
   });
@@ -87,9 +99,18 @@ test("query priced tiers are not token tiers", () => {
   );
 });
 
-test("tiers missing cost key contribute zero", () => {
+test("tiers missing cost key remain missing", () => {
   const tiers = parseTiers([{ range: [0, 100], input_cost_per_token: "0.000001" }]);
-  assert.equal(graduatedCost(50, tiers, "output").toFixed(6), "0.000000");
+  const rates = selectTierRates(tiers, 50);
+  assert.ok(rates !== null);
+  assert.equal(rateFor(rates, "output"), null);
+});
+
+test("output-only tier schedule is rejected", () => {
+  assert.deepEqual(
+    parseTiers([{ range: [0, 100], output_cost_per_token: "0.000001" }]),
+    []
+  );
 });
 
 test("parseTiers tolerates garbage", () => {
@@ -109,8 +130,33 @@ test("parseThresholds ignores negative and unparseable rates", () => {
   );
 });
 
-test("graduatedCost is zero for no tiers", () => {
-  assert.equal(graduatedCost(1000, [], "input").toFixed(6), "0.000000");
+test("no tier rates without tiers", () => {
+  assert.equal(selectTierRates([], 1000), null);
+});
+
+test("positive input outside every range uses the last tier", () => {
+  const tiers = parseTiers([
+    { range: [0, 100], input_cost_per_token: "0.000001" },
+    { range: [200, 300], input_cost_per_token: "0.000003" }
+  ]);
+  assert.equal(selectTierRates(tiers, 0), null);
+  assert.equal(selectTierRates(tiers, 150)?.input?.toFixed(), "0.000003");
+  assert.equal(selectTierRates(tiers, 400)?.input?.toFixed(), "0.000003");
+});
+
+test("range-bearing tier parsing rejects the whole table atomically", () => {
+  const valid = { range: [0, 100], input_cost_per_token: "0.000001" };
+  assert.deepEqual(parseTiers([valid, { range: [100] }]), []);
+  assert.deepEqual(parseTiers([valid, null]), []);
+  assert.deepEqual(parseTiers([valid, { input_cost_per_token: "0.000002" }]), []);
+  assert.deepEqual(parseTiers([valid, { range: [100, 200], input_cost_per_token: "bad" }]), []);
+  assert.deepEqual(
+    parseTiers([
+      valid,
+      { range: [50, 150], input_cost_per_token: "0.000002" }
+    ]),
+    []
+  );
 });
 
 test("threshold key preserves the k suffix form", () => {
