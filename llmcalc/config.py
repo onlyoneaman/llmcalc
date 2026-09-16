@@ -7,7 +7,7 @@ import re
 from importlib import metadata
 
 APP_NAME = "llmcalc"
-FALLBACK_VERSION = "0.2.1"
+FALLBACK_VERSION = "0.2.2"
 DEFAULT_CACHE_TIMEOUT_SECONDS = 43200
 MAX_SAFE_INTEGER = 2**53 - 1
 DEFAULT_CURRENCY = "USD"

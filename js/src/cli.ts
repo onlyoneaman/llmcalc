@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import path from "node:path";
+import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { cost, model, clearCache, pricingReport } from "./api.js";
@@ -440,11 +440,18 @@ export async function main(argv: string[], printer: Printer = {
   throw new Error(`Unknown command: ${command}`);
 }
 
-const isDirectExecution =
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+function isDirectExecution(): boolean {
+  if (process.argv[1] === undefined) {
+    return false;
+  }
+  try {
+    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
 
-if (isDirectExecution) {
+if (isDirectExecution()) {
   main(process.argv.slice(2))
     .then((code) => {
       process.exitCode = code;

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.2.2 - 2026-09-16
+
+### Fixed
+- The installed npm `llmcalc` executable now resolves its package-manager symlink before checking whether the CLI module is the process entrypoint. Version `0.2.1` could exit successfully without running a command when invoked through `node_modules/.bin`.
+
 ## 0.2.1 - 2026-09-16
 
 ### Fixed

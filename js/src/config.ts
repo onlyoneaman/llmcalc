@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export const APP_NAME = "llmcalc";
-export const FALLBACK_VERSION = "0.2.1";
+export const FALLBACK_VERSION = "0.2.2";
 export const DEFAULT_CACHE_TIMEOUT_SECONDS = 43200;
 export const DEFAULT_CURRENCY = "USD";
 export const DEFAULT_PRICING_URL =
